@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: terminal
+      POSTGRES_PASSWORD: terminal
+      POSTGRES_DB: clinic_terminal
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terminal -d clinic_terminal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://terminal:terminal@db:5432/clinic_terminal
+      MIS_BASE_URL: ${MIS_BASE_URL:-}
+      MIS_USER: ${MIS_USER:-}
+      MIS_PASSWORD: ${MIS_PASSWORD:-}
+      MIS_API_KEY: ${MIS_API_KEY:-}
+      MIS_VERIFY_TLS: ${MIS_VERIFY_TLS:-true}
+      MIS_CLINIC_GUID: ${MIS_CLINIC_GUID:-}
+      MIS_TARGET_CLINIC_GUID: ${MIS_TARGET_CLINIC_GUID:-}
+      MIS_MAIN_ONLY: ${MIS_MAIN_ONLY:-true}
+      SYNC_DAYS_AHEAD: ${SYNC_DAYS_AHEAD:-31}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-10}
+      SLOT_STEP_MINUTES: ${SLOT_STEP_MINUTES:-30}
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
