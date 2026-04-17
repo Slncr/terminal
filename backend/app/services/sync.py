@@ -842,6 +842,44 @@ async def run_full_sync(db: Session) -> SyncRun:
     return run
 
 
+async def run_slots_sync(db: Session) -> SyncRun:
+    run = SyncRun(started_at=_utcnow(), ok=False, message=None)
+    db.add(run)
+    db.commit()
+    if not _FULL_SYNC_LOCK.acquire(blocking=False):
+        run.ok = False
+        run.message = "sync already running"
+        run.finished_at = _utcnow()
+        db.commit()
+        return run
+
+    start, end = _range()
+    client = MisClient()
+    try:
+        # Lightweight refresh: update only availability tables.
+        _purge_range(db, start, end)
+        inserted = await _sync_schedule_enlargement(db, client, start, end)
+        # Safety fallback if enlargement returned too little data.
+        if inserted < 5:
+            await _sync_schedule_per_employee(db, client, start, end)
+        await _sync_tickets(db, client, start, end)
+        run.ok = True
+        run.message = "slots_only_ok"
+    except Exception as e:
+        logger.exception("slots-only sync failed")
+        db.rollback()
+        run.ok = False
+        run.message = str(e)
+    finally:
+        run.finished_at = _utcnow()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        _FULL_SYNC_LOCK.release()
+    return run
+
+
 def _purge_employee_range(db: Session, employee_mis_id: str, start: datetime, end: datetime) -> None:
     db.execute(
         delete(ScheduleSlot).where(

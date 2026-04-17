@@ -72,3 +72,72 @@ class SyncStatusOut(BaseModel):
     last_ok: bool | None
     full_sync_done: bool | None
     message: str | None
+
+
+class HomeTileIn(BaseModel):
+    title: str
+    tile_type: str
+    size: str = "small"
+    sort_order: int = 0
+    specialty_filters: str | None = None
+    image_url: str | None = None
+    image_fit: str = "cover"
+    image_x: int = 0
+    image_y: int = 0
+    image_scale: int = 100
+    is_active: bool = True
+
+
+class HomeTileOut(HomeTileIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class ConsumerDocumentIn(BaseModel):
+    title: str
+    file_url: str
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class ConsumerDocumentOut(ConsumerDocumentIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class PromoBannerIn(BaseModel):
+    title: str
+    image_url: str
+    description: str | None = None
+    card_image_url: str | None = None
+    card_image_fit: str = "cover"
+    card_image_x: int = 0
+    card_image_y: int = 0
+    card_image_scale: int = 100
+    list_image_url: str | None = None
+    list_image_fit: str = "cover"
+    list_image_x: int = 0
+    list_image_y: int = 0
+    list_image_scale: int = 100
+    target_url: str | None = None
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class PromoBannerOut(PromoBannerIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class DoctorMediaIn(BaseModel):
+    employee_mis_id: str
+    photo_url: str
+
+
+class DoctorMediaOut(DoctorMediaIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID

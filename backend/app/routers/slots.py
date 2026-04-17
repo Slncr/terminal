@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
@@ -9,11 +10,14 @@ from app.models import Employee, OccupiedSlot, ScheduleSlot, Service, TerminalAp
 from app.schemas import DaySlotOut, FreeSlotOut
 
 router = APIRouter()
+MIS_TZ = ZoneInfo("Europe/Moscow")
 
 
 def _day_bounds(day: datetime) -> tuple[datetime, datetime]:
     if day.tzinfo is None:
-        day = day.replace(tzinfo=timezone.utc)
+        day = day.replace(tzinfo=MIS_TZ)
+    else:
+        day = day.astimezone(MIS_TZ)
     start = day.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
     return start, end
