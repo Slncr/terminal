@@ -30,11 +30,13 @@ services:
       MIS_TARGET_CLINIC_GUID: ${MIS_TARGET_CLINIC_GUID:-}
       MIS_MAIN_ONLY: ${MIS_MAIN_ONLY:-true}
       SYNC_DAYS_AHEAD: ${SYNC_DAYS_AHEAD:-31}
-      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-10}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-15}
       SLOT_STEP_MINUTES: ${SLOT_STEP_MINUTES:-30}
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy

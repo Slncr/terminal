@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     mis_target_clinic_guid: str | None = None
 
     sync_days_ahead: int = 31
-    sync_interval_minutes: int = 10
+    sync_interval_minutes: int = 2
     slot_step_minutes: int = 30
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

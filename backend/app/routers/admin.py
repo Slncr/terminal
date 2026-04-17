@@ -1,0 +1,171 @@
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
+from app.schemas import (
+    ConsumerDocumentIn,
+    ConsumerDocumentOut,
+    DoctorMediaIn,
+    DoctorMediaOut,
+    HomeTileIn,
+    HomeTileOut,
+    PromoBannerIn,
+    PromoBannerOut,
+)
+
+router = APIRouter()
+
+MEDIA_ROOT = Path("/app/uploads")
+
+
+def _save_upload(file: UploadFile, folder: str) -> str:
+    ext = Path(file.filename or "").suffix.lower() or ".bin"
+    name = f"{uuid.uuid4().hex}{ext}"
+    target_dir = MEDIA_ROOT / folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / name
+    with target.open("wb") as f:
+        f.write(file.file.read())
+    return f"/media/{folder}/{name}"
+
+
+@router.post("/upload")
+def upload_media(file: UploadFile = File(...), folder: str = "misc") -> dict[str, str]:
+    return {"url": _save_upload(file, folder)}
+
+
+@router.get("/tiles", response_model=list[HomeTileOut])
+def list_tiles(db: Session = Depends(get_db)) -> list[HomeTile]:
+    return list(db.scalars(select(HomeTile).order_by(HomeTile.sort_order, HomeTile.title)).all())
+
+
+@router.post("/tiles", response_model=HomeTileOut)
+def create_tile(payload: HomeTileIn, db: Session = Depends(get_db)) -> HomeTile:
+    existing = db.scalars(select(HomeTile).where(HomeTile.title == payload.title)).first()
+    if existing is None:
+        row = HomeTile(**payload.model_dump())
+        db.add(row)
+    else:
+        row = existing
+        row.tile_type = payload.tile_type
+        row.size = payload.size
+        row.sort_order = payload.sort_order
+        row.specialty_filters = payload.specialty_filters
+        row.image_url = payload.image_url
+        row.image_fit = payload.image_fit
+        row.image_x = payload.image_x
+        row.image_y = payload.image_y
+        row.image_scale = payload.image_scale
+        row.is_active = payload.is_active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/tiles/{tile_id}")
+def delete_tile(tile_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(HomeTile).where(HomeTile.id == tile_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/documents", response_model=list[ConsumerDocumentOut])
+def list_documents(db: Session = Depends(get_db)) -> list[ConsumerDocument]:
+    return list(
+        db.scalars(select(ConsumerDocument).order_by(ConsumerDocument.sort_order, ConsumerDocument.title)).all()
+    )
+
+
+@router.post("/documents", response_model=ConsumerDocumentOut)
+def create_document(payload: ConsumerDocumentIn, db: Session = Depends(get_db)) -> ConsumerDocument:
+    row = ConsumerDocument(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/documents/{doc_id}")
+def delete_document(doc_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(ConsumerDocument).where(ConsumerDocument.id == doc_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/banners", response_model=list[PromoBannerOut])
+def list_banners(db: Session = Depends(get_db)) -> list[PromoBanner]:
+    return list(db.scalars(select(PromoBanner).order_by(PromoBanner.sort_order, PromoBanner.title)).all())
+
+
+@router.post("/banners", response_model=PromoBannerOut)
+def create_banner(payload: PromoBannerIn, db: Session = Depends(get_db)) -> PromoBanner:
+    row = PromoBanner(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/banners/{banner_id}", response_model=PromoBannerOut)
+def update_banner(banner_id: str, payload: PromoBannerIn, db: Session = Depends(get_db)) -> PromoBanner:
+    row = db.get(PromoBanner, banner_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="banner not found")
+    row.title = payload.title
+    row.image_url = payload.image_url
+    row.description = payload.description
+    row.card_image_url = payload.card_image_url
+    row.card_image_fit = payload.card_image_fit
+    row.card_image_x = payload.card_image_x
+    row.card_image_y = payload.card_image_y
+    row.card_image_scale = payload.card_image_scale
+    row.list_image_url = payload.list_image_url
+    row.list_image_fit = payload.list_image_fit
+    row.list_image_x = payload.list_image_x
+    row.list_image_y = payload.list_image_y
+    row.list_image_scale = payload.list_image_scale
+    row.target_url = payload.target_url
+    row.sort_order = payload.sort_order
+    row.is_active = payload.is_active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/banners/{banner_id}")
+def delete_banner(banner_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(PromoBanner).where(PromoBanner.id == banner_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/doctor-media", response_model=list[DoctorMediaOut])
+def list_doctor_media(db: Session = Depends(get_db)) -> list[DoctorMedia]:
+    return list(db.scalars(select(DoctorMedia).order_by(DoctorMedia.employee_mis_id)).all())
+
+
+@router.post("/doctor-media", response_model=DoctorMediaOut)
+def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -> DoctorMedia:
+    existing = db.scalars(select(DoctorMedia).where(DoctorMedia.employee_mis_id == payload.employee_mis_id)).first()
+    if existing is None:
+        existing = DoctorMedia(**payload.model_dump())
+        db.add(existing)
+    else:
+        existing.photo_url = payload.photo_url
+    db.commit()
+    db.refresh(existing)
+    return existing
+
+
+@router.delete("/doctor-media/{employee_mis_id}")
+def delete_doctor_media(employee_mis_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(DoctorMedia).where(DoctorMedia.employee_mis_id == employee_mis_id))
+    db.commit()
+    return {"ok": True}

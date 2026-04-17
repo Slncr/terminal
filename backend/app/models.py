@@ -127,3 +127,64 @@ class SyncState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     full_sync_done: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class HomeTile(Base):
+    __tablename__ = "home_tiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(128))
+    tile_type: Mapped[str] = mapped_column(String(32), index=True)
+    size: Mapped[str] = mapped_column(String(32), default="small")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    specialty_filters: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_fit: Mapped[str] = mapped_column(String(16), default="cover")
+    image_x: Mapped[int] = mapped_column(Integer, default=0)
+    image_y: Mapped[int] = mapped_column(Integer, default=0)
+    image_scale: Mapped[int] = mapped_column(Integer, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ConsumerDocument(Base):
+    __tablename__ = "consumer_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(255))
+    file_url: Mapped[str] = mapped_column(String(512))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class PromoBanner(Base):
+    __tablename__ = "promo_banners"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(255))
+    image_url: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    card_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    card_image_fit: Mapped[str] = mapped_column(String(16), default="cover")
+    card_image_x: Mapped[int] = mapped_column(Integer, default=0)
+    card_image_y: Mapped[int] = mapped_column(Integer, default=0)
+    card_image_scale: Mapped[int] = mapped_column(Integer, default=100)
+    list_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    list_image_fit: Mapped[str] = mapped_column(String(16), default="cover")
+    list_image_x: Mapped[int] = mapped_column(Integer, default=0)
+    list_image_y: Mapped[int] = mapped_column(Integer, default=0)
+    list_image_scale: Mapped[int] = mapped_column(Integer, default=100)
+    target_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class DoctorMedia(Base):
+    __tablename__ = "doctor_media"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_mis_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.mis_id"), index=True)
+    photo_url: Mapped[str] = mapped_column(String(512))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
