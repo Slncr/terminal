@@ -201,6 +201,7 @@ export default function App() {
             doctors={doctors}
             onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
             onOpenGroup={(title, doctorsInGroup) => setView({ kind: 'doctors', title, doctors: doctorsInGroup })}
+            onOpenDoctor={(doctor) => setView({ kind: 'doctor', doctor })}
             onOpenPromos={() => setView({ kind: 'promos' })}
             onOpenCheckups={() => setView({ kind: 'checkups' })}
             tiles={tiles}
@@ -248,6 +249,7 @@ function HomeTiles({
   doctors,
   onOpenDoctors,
   onOpenGroup,
+  onOpenDoctor,
   onOpenPromos,
   onOpenCheckups,
   tiles,
@@ -257,6 +259,7 @@ function HomeTiles({
   doctors: Employee[]
   onOpenDoctors: () => void
   onOpenGroup: (title: string, doctorsInGroup: Employee[]) => void
+  onOpenDoctor: (doctor: Employee) => void
   onOpenPromos: () => void
   onOpenCheckups: () => void
   tiles: AdminTile[]
@@ -279,7 +282,11 @@ function HomeTiles({
       const qs = needles.map((x) => x.trim().toLowerCase()).filter(Boolean)
       return doctors.filter((d) => {
         const s = (d.specialty ?? '').toLowerCase()
-        return qs.some((q) => s.includes(q))
+        const tokens = s.split(/[^a-zа-я0-9]+/i).filter(Boolean)
+        return qs.some((q) => {
+          if (q.length <= 2) return tokens.includes(q)
+          return s.includes(q)
+        })
       })
     },
     [doctors],
@@ -468,7 +475,7 @@ function HomeTiles({
   )
 
   const openByFilters = useCallback(
-    (title: string, filters: string | null) => {
+    (title: string, filters: string | null, directSingle: boolean = false) => {
       const needles = (filters ?? '')
         .split(',')
         .map((x) => x.trim())
@@ -477,9 +484,14 @@ function HomeTiles({
         onOpenDoctors()
         return
       }
-      onOpenGroup(title, doctorsForAny(needles))
+      const matched = doctorsForAny(needles)
+      if (directSingle && matched.length === 1) {
+        onOpenDoctor(matched[0])
+        return
+      }
+      onOpenGroup(title, matched)
     },
-    [doctorsForAny, onOpenDoctors, onOpenGroup],
+    [doctorsForAny, onOpenDoctor, onOpenDoctors, onOpenGroup],
   )
 
   useEffect(() => {
@@ -501,7 +513,8 @@ function HomeTiles({
       if (title.includes('космет')) return 'tile-cosmo'
       return 'tile-checkup'
     }
-    return 'tile-small-specialty'
+    const isDiag = ['мрт', 'кт', 'рентген', 'узи'].some((x) => title.includes(x))
+    return isDiag ? 'tile-small-diagnostics' : 'tile-small-specialists'
   }, [])
 
   const getTileImageMeta = useCallback(
@@ -550,7 +563,9 @@ function HomeTiles({
       </button>
 
       <div className="home-head">
-        <div className="logo-mark">ЕВРОДОН</div>
+        <div className="logo-mark">
+          <img src="/logo.svg" alt="Евродон" className="logo-mark-img" />
+        </div>
         <h1>Добро пожаловать</h1>
       </div>
 
@@ -592,7 +607,10 @@ function HomeTiles({
                 key={t.id}
                 type="button"
                 className={`home-tile home-tile-small ${getTileClassName(t, 'small')}`}
-                onClick={() => openByFilters(t.title, t.specialty_filters)}
+                onClick={() => {
+                  const diagnosticFast = ['мрт', 'кт', 'рентген'].some((x) => t.title.toLowerCase().includes(x))
+                  openByFilters(t.title, t.specialty_filters, diagnosticFast)
+                }}
               >
                 {renderTileTitle(t.title, false)}
                 <span className="tile-more">Подробнее</span>
@@ -709,11 +727,13 @@ function PromoDetails({ banner, onBack }: { banner: AdminBanner; onBack: () => v
         <h2>Акции</h2>
       </div>
       <section className="promo-details">
-        <h3>{banner.title}</h3>
-        <div className="promo-details-image-wrap">
-          <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
+        <h3 className="promo-details-title">{banner.title}</h3>
+        <div className="promo-details-body">
+          <div className="promo-details-image-wrap promo-details-image-wrap-small">
+            <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
+          </div>
+          <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
         </div>
-        <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
       </section>
     </>
   )
@@ -872,20 +892,48 @@ function DoctorGrid({
 }
 
 function ConsumerCornerModal({ documents, onClose }: { documents: AdminDocument[]; onClose: () => void }) {
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string>('')
+
+  useEffect(() => {
+    if (!documents.length) {
+      setSelectedDocUrl('')
+      return
+    }
+    if (!selectedDocUrl || !documents.some((d) => d.file_url === selectedDocUrl)) {
+      setSelectedDocUrl(documents[0].file_url)
+    }
+  }, [documents, selectedDocUrl])
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal modal-consumer">
         <h3>Уголок потребителя</h3>
         {documents.length === 0 ? (
           <div className="empty-hint">Документы не загружены</div>
         ) : (
-          <div className="form-grid">
+          <>
+          <div className="form-grid consumer-doc-list">
             {documents.map((d) => (
-              <a key={d.id} href={d.file_url} target="_blank" rel="noreferrer" className="doc-link">
+              <button
+                key={d.id}
+                type="button"
+                className={`doc-link ${selectedDocUrl === d.file_url ? 'active' : ''}`}
+                onClick={() => setSelectedDocUrl(d.file_url)}
+              >
                 {d.title}
-              </a>
+              </button>
             ))}
           </div>
+          {selectedDocUrl && (
+            <div className="consumer-doc-preview">
+              <iframe
+                title="Просмотр документа"
+                src={selectedDocUrl}
+                className="consumer-doc-frame"
+              />
+            </div>
+          )}
+          </>
         )}
         <div className="form-actions">
           <button type="button" className="btn-primary" onClick={onClose}>
