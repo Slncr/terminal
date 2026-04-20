@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createAppointment,
   createAdminBanner,
+  createAdminCheckup,
   createAdminDocument,
   createAdminTile,
   deleteAdminBanner,
+  deleteAdminCheckup,
   deleteAdminDocument,
   deleteAdminDoctorMedia,
   deleteAdminTile,
@@ -15,15 +17,18 @@ import {
   fetchSyncStatus,
   getAppointment,
   listAdminBanners,
+  listAdminCheckups,
   listAdminDoctorMedia,
   listAdminDocuments,
   listAdminTiles,
   uploadAdminFile,
   updateAdminBanner,
+  updateAdminCheckup,
   upsertAdminDoctorMedia,
   type AdminBanner,
   type AdminDoctorMedia,
   type AdminDocument,
+  type AdminCheckupItem,
   type AdminTile,
   type DaySlot,
   type Employee,
@@ -59,6 +64,8 @@ type MainView =
   | { kind: 'doctor'; doctor: Employee }
   | { kind: 'promos' }
   | { kind: 'promo'; banner: AdminBanner }
+  | { kind: 'checkups' }
+  | { kind: 'checkup'; item: AdminCheckupItem }
 
 const DIAGNOSTIC_GROUPS: DoctorGroup[] = [
   { title: 'МРТ', specialties: ['мрт', 'магнитно-резонанс'] },
@@ -119,16 +126,18 @@ export default function App() {
   const [tiles, setTiles] = useState<AdminTile[]>([])
   const [documents, setDocuments] = useState<AdminDocument[]>([])
   const [banners, setBanners] = useState<AdminBanner[]>([])
+  const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
   const [doctorMedia, setDoctorMedia] = useState<Record<string, string>>({})
 
   const refreshMeta = useCallback(async () => {
     try {
-      const [d, st, t, docs, b, dm] = await Promise.all([
+      const [d, st, t, docs, b, c, dm] = await Promise.all([
         fetchDoctors(),
         fetchSyncStatus(),
         listAdminTiles(),
         listAdminDocuments(),
         listAdminBanners(),
+        listAdminCheckups(),
         listAdminDoctorMedia(),
       ])
       setDoctors(d)
@@ -136,6 +145,7 @@ export default function App() {
       setTiles(t.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setDocuments(docs.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setBanners(b.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
+      setCheckups(c.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       const map: Record<string, string> = {}
       for (const row of dm) map[row.employee_mis_id] = row.photo_url
       setDoctorMedia(map)
@@ -192,6 +202,7 @@ export default function App() {
             onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
             onOpenGroup={(title, doctorsInGroup) => setView({ kind: 'doctors', title, doctors: doctorsInGroup })}
             onOpenPromos={() => setView({ kind: 'promos' })}
+            onOpenCheckups={() => setView({ kind: 'checkups' })}
             tiles={tiles}
             documents={documents}
             banners={banners}
@@ -202,6 +213,12 @@ export default function App() {
         )}
         {!loading && view.kind === 'promo' && (
           <PromoDetails banner={view.banner} onBack={() => setView({ kind: 'promos' })} />
+        )}
+        {!loading && view.kind === 'checkups' && (
+          <CheckupGrid items={checkups} onBack={() => setView({ kind: 'home' })} onPick={(item) => setView({ kind: 'checkup', item })} />
+        )}
+        {!loading && view.kind === 'checkup' && (
+          <CheckupDetails item={view.item} onBack={() => setView({ kind: 'checkups' })} />
         )}
         {!loading && view.kind === 'doctors' && (
           <DoctorGrid
@@ -232,6 +249,7 @@ function HomeTiles({
   onOpenDoctors,
   onOpenGroup,
   onOpenPromos,
+  onOpenCheckups,
   tiles,
   documents,
   banners,
@@ -240,6 +258,7 @@ function HomeTiles({
   onOpenDoctors: () => void
   onOpenGroup: (title: string, doctorsInGroup: Employee[]) => void
   onOpenPromos: () => void
+  onOpenCheckups: () => void
   tiles: AdminTile[]
   documents: AdminDocument[]
   banners: AdminBanner[]
@@ -601,6 +620,10 @@ function HomeTiles({
                     onOpenPromos()
                     return
                   }
+                  if (t.title.toLowerCase().includes('check-up') || t.title.toLowerCase().includes('чекап') || t.title.toLowerCase().includes('чек-ап')) {
+                    onOpenCheckups()
+                    return
+                  }
                   openByFilters(t.title, t.specialty_filters)
                 }}
               >
@@ -691,6 +714,60 @@ function PromoDetails({ banner, onBack }: { banner: AdminBanner; onBack: () => v
           <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
         </div>
         <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
+      </section>
+    </>
+  )
+}
+
+function CheckupGrid({
+  items,
+  onBack,
+  onPick,
+}: {
+  items: AdminCheckupItem[]
+  onBack: () => void
+  onPick: (item: AdminCheckupItem) => void
+}) {
+  return (
+    <>
+      <div className="doctors-page-head">
+        <button type="button" className="back-chip-btn" onClick={onBack}>
+          <span aria-hidden>←</span> Назад
+        </button>
+        <h2>Программы Check-up</h2>
+      </div>
+      <div className="checkup-group-title">Общий</div>
+      <div className="checkup-grid">
+        {items.map((item) => (
+          <button key={item.id} type="button" className="checkup-row" onClick={() => onPick(item)}>
+            <span className="checkup-icon">◧</span>
+            <span className="checkup-name">{item.title}</span>
+            <span className="checkup-price">{item.price_label || ''}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
+function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () => void }) {
+  return (
+    <>
+      <div className="doctors-page-head">
+        <button type="button" className="back-chip-btn" onClick={onBack}>
+          <span aria-hidden>←</span> Назад
+        </button>
+        <h2>Программы Check-up</h2>
+      </div>
+      <section className="promo-details">
+        <h3>{item.title}</h3>
+        {item.image_url && (
+          <div className="promo-details-image-wrap">
+            <img src={item.image_url} alt={item.title} className="promo-details-image" />
+          </div>
+        )}
+        {item.price_label && <div className="meta" style={{ marginBottom: '0.6rem' }}>{item.price_label}</div>}
+        <div className="promo-details-text">{item.description?.trim() || 'Описание программы скоро появится.'}</div>
       </section>
     </>
   )
@@ -1306,9 +1383,11 @@ function BookingModal({
 }
 
 function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: string }) {
+  const [adminTab, setAdminTab] = useState<'tiles' | 'documents' | 'banners' | 'checkups' | 'doctors'>('tiles')
   const [tiles, setTiles] = useState<AdminTile[]>([])
   const [documents, setDocuments] = useState<AdminDocument[]>([])
   const [banners, setBanners] = useState<AdminBanner[]>([])
+  const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
   const [media, setMedia] = useState<AdminDoctorMedia[]>([])
   const [status, setStatus] = useState<string>('')
 
@@ -1338,19 +1417,29 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [bannerListY, setBannerListY] = useState(0)
   const [bannerListScale, setBannerListScale] = useState(100)
 
+  const [checkupTitle, setCheckupTitle] = useState('')
+  const [checkupSubtitle, setCheckupSubtitle] = useState('')
+  const [checkupPrice, setCheckupPrice] = useState('')
+  const [checkupImage, setCheckupImage] = useState('')
+  const [checkupDescription, setCheckupDescription] = useState('')
+  const [checkupSort, setCheckupSort] = useState(0)
+  const [checkupEditId, setCheckupEditId] = useState('')
+
   const [doctorId, setDoctorId] = useState('')
   const [doctorPhoto, setDoctorPhoto] = useState('')
 
   const reload = useCallback(async () => {
-    const [t, d, b, m] = await Promise.all([
+    const [t, d, b, c, m] = await Promise.all([
       listAdminTiles(),
       listAdminDocuments(),
       listAdminBanners(),
+      listAdminCheckups(),
       listAdminDoctorMedia(),
     ])
     setTiles(t)
     setDocuments(d)
     setBanners(b)
+    setCheckups(c)
     setMedia(m)
   }, [])
 
@@ -1384,6 +1473,21 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setBannerListY(Number(selectedBanner.list_image_y ?? 0))
     setBannerListScale(Number(selectedBanner.list_image_scale ?? 100))
   }, [selectedBanner?.id])
+
+  const selectedCheckup = useMemo(
+    () => checkups.find((x) => x.id === checkupEditId) ?? null,
+    [checkups, checkupEditId],
+  )
+
+  useEffect(() => {
+    if (!selectedCheckup) return
+    setCheckupTitle(selectedCheckup.title)
+    setCheckupSubtitle(selectedCheckup.subtitle ?? '')
+    setCheckupPrice(selectedCheckup.price_label ?? '')
+    setCheckupImage(selectedCheckup.image_url ?? '')
+    setCheckupDescription(selectedCheckup.description ?? '')
+    setCheckupSort(Number(selectedCheckup.sort_order ?? 0))
+  }, [selectedCheckup?.id])
 
   const tilePreset = useMemo(
     () => FIXED_TILE_PRESETS.find((x) => x.key === tilePresetKey) ?? FIXED_TILE_PRESETS[0],
@@ -1419,15 +1523,24 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   }, [tilePresetKey, existingTileImage?.id])
 
   return (
-    <main>
+    <main className="admin-shell">
       <h1>Админ модуль</h1>
       <p className="meta">Настройка контента главной страницы и медиа</p>
-      <div className="card" style={{ marginBottom: '1rem' }}>
+      <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <strong>Статус синхронизации</strong>
         <div className="meta">{syncLabel}</div>
       </div>
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
+      <div className="admin-tabs">
+        <button type="button" className={`admin-tab ${adminTab === 'tiles' ? 'active' : ''}`} onClick={() => setAdminTab('tiles')}>Плитки</button>
+        <button type="button" className={`admin-tab ${adminTab === 'documents' ? 'active' : ''}`} onClick={() => setAdminTab('documents')}>Документы</button>
+        <button type="button" className={`admin-tab ${adminTab === 'banners' ? 'active' : ''}`} onClick={() => setAdminTab('banners')}>Акции</button>
+        <button type="button" className={`admin-tab ${adminTab === 'checkups' ? 'active' : ''}`} onClick={() => setAdminTab('checkups')}>Check-up</button>
+        <button type="button" className={`admin-tab ${adminTab === 'doctors' ? 'active' : ''}`} onClick={() => setAdminTab('doctors')}>Фото врачей</button>
+      </div>
+
+      {adminTab === 'tiles' && (
+      <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <h2>Картинки фиксированных плиток</h2>
         <p className="meta">
           Состав плиток фиксированный. Здесь можно только заменить изображение для нужной плитки.
@@ -1551,7 +1664,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
         </div>
         <div className="meta">Загружено изображений плиток: {tiles.length}</div>
         {tiles.length > 0 && (
-          <div className="form-grid" style={{ marginTop: '0.75rem' }}>
+          <div className="admin-list" style={{ marginTop: '0.75rem' }}>
             {tiles.map((t) => (
               <div key={t.id} className="admin-row">
                 <div>
@@ -1573,8 +1686,10 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </div>
         )}
       </div>
+      )}
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
+      {adminTab === 'documents' && (
+      <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <h2>Уголок потребителя (документы)</h2>
         <div className="form-grid">
           <input placeholder="Название документа" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} />
@@ -1603,7 +1718,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
         </div>
         <div className="meta">Документов: {documents.length}</div>
         {documents.length > 0 && (
-          <div className="form-grid" style={{ marginTop: '0.75rem' }}>
+          <div className="admin-list" style={{ marginTop: '0.75rem' }}>
             {documents.map((d) => (
               <div key={d.id} className="admin-row">
                 <a href={d.file_url} target="_blank" rel="noreferrer" className="doc-link">
@@ -1625,10 +1740,13 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </div>
         )}
       </div>
+      )}
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
+      {adminTab === 'banners' && (
+      <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <h2>Рекламные баннеры</h2>
-        <div className="form-grid">
+        <div className="admin-subtitle">Создание акции</div>
+        <div className="form-grid admin-grid admin-grid--banner-create">
           <input placeholder="Заголовок баннера" value={bannerTitle} onChange={(e) => setBannerTitle(e.target.value)} />
           <input placeholder="URL баннера" value={bannerImage} onChange={(e) => setBannerImage(e.target.value)} />
           <textarea placeholder="Описание акции" value={bannerDescription} onChange={(e) => setBannerDescription(e.target.value)} />
@@ -1674,7 +1792,9 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </button>
         </div>
         {banners.length > 0 && selectedBanner && (
-          <div className="form-grid" style={{ marginTop: '1rem' }}>
+          <>
+          <div className="admin-subtitle" style={{ marginTop: '1rem' }}>Главная плитка "Акции"</div>
+          <div className="form-grid admin-grid admin-grid--banner-tune" style={{ marginTop: '0.55rem' }}>
             <label>
               Баннер для главной плитки "Акции"
               <select value={bannerPresetId} onChange={(e) => setBannerPresetId(e.target.value)}>
@@ -1744,9 +1864,12 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               <input type="range" min={40} max={220} value={bannerCardScale} onChange={(e) => setBannerCardScale(Number(e.target.value))} />
             </label>
           </div>
+          </>
         )}
         {banners.length > 0 && selectedBanner && (
-          <div className="form-grid" style={{ marginTop: '0.75rem' }}>
+          <>
+          <div className="admin-subtitle" style={{ marginTop: '0.75rem' }}>Карточка общего экрана акций</div>
+          <div className="form-grid admin-grid admin-grid--banner-tune" style={{ marginTop: '0.55rem' }}>
             <label>
               Карточка на общем экране акций
               <select value={bannerPresetId} onChange={(e) => setBannerPresetId(e.target.value)}>
@@ -1816,6 +1939,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               <input type="range" min={40} max={220} value={bannerListScale} onChange={(e) => setBannerListScale(Number(e.target.value))} />
             </label>
           </div>
+          </>
         )}
         {selectedBanner && (
           <div className="tile-preview-wrap" style={{ marginTop: '0.75rem' }}>
@@ -1857,7 +1981,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
         )}
         <div className="meta">Баннеров: {banners.length}</div>
         {banners.length > 0 && (
-          <div className="form-grid" style={{ marginTop: '0.75rem' }}>
+          <div className="admin-list" style={{ marginTop: '0.75rem' }}>
             {banners.map((b) => (
               <div key={b.id} className="admin-row">
                 <div>
@@ -1880,10 +2004,110 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </div>
         )}
       </div>
+      )}
 
-      <div className="card">
+      {adminTab === 'checkups' && (
+      <div className="card admin-card" style={{ marginBottom: '1rem' }}>
+        <h2>Контент страницы Check-up</h2>
+        <div className="form-grid admin-grid admin-grid--checkups">
+          <label>
+            Запись для редактирования
+            <select value={checkupEditId} onChange={(e) => setCheckupEditId(e.target.value)}>
+              <option value="">Новая запись</option>
+              {checkups.map((x) => (
+                <option key={x.id} value={x.id}>{x.title}</option>
+              ))}
+            </select>
+          </label>
+          <input placeholder="Заголовок" value={checkupTitle} onChange={(e) => setCheckupTitle(e.target.value)} />
+          <input placeholder="Подзаголовок (необязательно)" value={checkupSubtitle} onChange={(e) => setCheckupSubtitle(e.target.value)} />
+          <input placeholder="Цена / подпись справа" value={checkupPrice} onChange={(e) => setCheckupPrice(e.target.value)} />
+          <input placeholder="URL картинки для детальной страницы" value={checkupImage} onChange={(e) => setCheckupImage(e.target.value)} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const url = await uploadAdminFile(file, 'checkups')
+              setCheckupImage(url)
+            }}
+          />
+          <input
+            type="number"
+            placeholder="Порядок"
+            value={checkupSort}
+            onChange={(e) => setCheckupSort(Number(e.target.value) || 0)}
+          />
+          <textarea placeholder="Описание программы" value={checkupDescription} onChange={(e) => setCheckupDescription(e.target.value)} />
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              const payload = {
+                title: checkupTitle,
+                subtitle: checkupSubtitle || null,
+                price_label: checkupPrice || null,
+                image_url: checkupImage || null,
+                description: checkupDescription || null,
+                sort_order: checkupSort,
+                is_active: true,
+              }
+              if (checkupEditId) {
+                await updateAdminCheckup(checkupEditId, payload)
+                setStatus('Программа Check-up обновлена')
+              } else {
+                await createAdminCheckup(payload)
+                setStatus('Программа Check-up добавлена')
+              }
+              setCheckupEditId('')
+              setCheckupTitle('')
+              setCheckupSubtitle('')
+              setCheckupPrice('')
+              setCheckupImage('')
+              setCheckupDescription('')
+              setCheckupSort(0)
+              await reload()
+            }}
+            disabled={!checkupTitle.trim()}
+          >
+            {checkupEditId ? 'Сохранить изменения' : 'Добавить программу'}
+          </button>
+        </div>
+        <div className="meta">Программ: {checkups.length}</div>
+        {checkups.length > 0 && (
+          <div className="admin-list" style={{ marginTop: '0.75rem' }}>
+            {checkups.map((x) => (
+              <div key={x.id} className="admin-row">
+                <div>
+                  <strong>{x.title}</strong>
+                  {x.price_label && <div className="meta">{x.price_label}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="button" className="btn-ghost" onClick={() => setCheckupEditId(x.id)}>Редактировать</button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={async () => {
+                      await deleteAdminCheckup(x.id)
+                      setStatus('Программа удалена')
+                      if (checkupEditId === x.id) setCheckupEditId('')
+                      await reload()
+                    }}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
+
+      {adminTab === 'doctors' && (
+      <div className="card admin-card">
         <h2>Фото в карточках врачей</h2>
-        <div className="form-grid">
+        <div className="form-grid admin-grid admin-grid--doctors">
           <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
             <option value="">Выберите врача</option>
             {doctors.map((d) => (
@@ -1917,7 +2141,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
         </div>
         <div className="meta">Фото врачей: {media.length}</div>
         {media.length > 0 && (
-          <div className="form-grid" style={{ marginTop: '0.75rem' }}>
+          <div className="admin-list" style={{ marginTop: '0.75rem' }}>
             {media.map((m) => (
               <div key={m.id} className="admin-row">
                 <div className="meta">{m.employee_mis_id}</div>
@@ -1937,6 +2161,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </div>
         )}
       </div>
+      )}
 
       {status && <div className="status-msg ok">{status}</div>}
     </main>

@@ -159,6 +159,17 @@ export type AdminDoctorMedia = {
   photo_url: string
 }
 
+export type AdminCheckupItem = {
+  id: string
+  title: string
+  subtitle: string | null
+  price_label: string | null
+  image_url: string | null
+  description: string | null
+  sort_order: number
+  is_active: boolean
+}
+
 export async function uploadAdminFile(file: File, folder: string): Promise<string> {
   const form = new FormData()
   form.append('file', file)
@@ -252,5 +263,33 @@ export async function upsertAdminDoctorMedia(body: { employee_mis_id: string; ph
 
 export async function deleteAdminDoctorMedia(employeeId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/admin/doctor-media/${encodeURIComponent(employeeId)}`, { method: 'DELETE' })
+  await parseJson(res)
+}
+
+export async function listAdminCheckups(): Promise<AdminCheckupItem[]> {
+  const res = await fetch(`${API_BASE}/admin/checkups`)
+  return parseJson(res)
+}
+
+export async function createAdminCheckup(body: Omit<AdminCheckupItem, 'id'>): Promise<AdminCheckupItem> {
+  const res = await fetch(`${API_BASE}/admin/checkups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function updateAdminCheckup(id: string, body: Omit<AdminCheckupItem, 'id'>): Promise<AdminCheckupItem> {
+  const res = await fetch(`${API_BASE}/admin/checkups/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function deleteAdminCheckup(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/checkups/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJson(res)
 }

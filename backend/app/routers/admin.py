@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
+from app.models import CheckupItem, ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
 from app.schemas import (
     ConsumerDocumentIn,
     ConsumerDocumentOut,
@@ -16,6 +16,8 @@ from app.schemas import (
     DoctorMediaOut,
     HomeTileIn,
     HomeTileOut,
+    CheckupItemIn,
+    CheckupItemOut,
     PromoBannerIn,
     PromoBannerOut,
 )
@@ -167,5 +169,43 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
 @router.delete("/doctor-media/{employee_mis_id}")
 def delete_doctor_media(employee_mis_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
     db.execute(delete(DoctorMedia).where(DoctorMedia.employee_mis_id == employee_mis_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/checkups", response_model=list[CheckupItemOut])
+def list_checkups(db: Session = Depends(get_db)) -> list[CheckupItem]:
+    return list(db.scalars(select(CheckupItem).order_by(CheckupItem.sort_order, CheckupItem.title)).all())
+
+
+@router.post("/checkups", response_model=CheckupItemOut)
+def create_checkup(payload: CheckupItemIn, db: Session = Depends(get_db)) -> CheckupItem:
+    row = CheckupItem(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/checkups/{checkup_id}", response_model=CheckupItemOut)
+def update_checkup(checkup_id: str, payload: CheckupItemIn, db: Session = Depends(get_db)) -> CheckupItem:
+    row = db.get(CheckupItem, checkup_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="checkup not found")
+    row.title = payload.title
+    row.subtitle = payload.subtitle
+    row.price_label = payload.price_label
+    row.image_url = payload.image_url
+    row.description = payload.description
+    row.sort_order = payload.sort_order
+    row.is_active = payload.is_active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/checkups/{checkup_id}")
+def delete_checkup(checkup_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(CheckupItem).where(CheckupItem.id == checkup_id))
     db.commit()
     return {"ok": True}
