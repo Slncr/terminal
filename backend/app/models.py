@@ -188,3 +188,17 @@ class DoctorMedia(Base):
     employee_mis_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.mis_id"), index=True)
     photo_url: Mapped[str] = mapped_column(String(512))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class CheckupItem(Base):
+    __tablename__ = "checkup_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(255))
+    subtitle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    price_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

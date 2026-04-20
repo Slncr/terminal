@@ -141,3 +141,19 @@ class DoctorMediaOut(DoctorMediaIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+
+
+class CheckupItemIn(BaseModel):
+    title: str
+    subtitle: str | None = None
+    price_label: str | None = None
+    image_url: str | None = None
+    description: str | None = None
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class CheckupItemOut(CheckupItemIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID

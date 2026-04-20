@@ -381,8 +381,10 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.65rem 0;
-  border-top: 1px dashed var(--border);
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #e3e8f1;
+  border-radius: 12px;
+  background: #fbfcff;
 }
 
 .tile-preview-wrap {
@@ -1266,6 +1268,219 @@ main {
   white-space: pre-wrap;
 }
 
+.checkup-group-title {
+  width: min(1820px, 100%);
+  margin: 0 auto 1rem;
+  height: 46px;
+  border-radius: 12px;
+  background: #d9f2ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #21343a;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.checkup-grid {
+  width: min(1820px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.checkup-row {
+  min-height: 64px;
+  border-radius: 16px;
+  border: 1px solid #d5dbe6;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+}
+
+.checkup-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef2f8;
+  color: #0094f5;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+
+.checkup-name {
+  color: #2f3848;
+  font-size: 1.05rem;
+}
+
+.checkup-price {
+  color: #2f3848;
+  font-size: 1.05rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.4rem;
+  border: 1px solid #dce3ee;
+  background: #f6f9fd;
+  border-radius: 14px;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+}
+
+.admin-tab {
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #cdd6e3;
+  background: #ffffff;
+  color: #4b5871;
+  padding: 0 1rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.admin-tab:hover {
+  border-color: #9dc9ea;
+  color: #25689a;
+}
+
+.admin-tab.active {
+  border-color: #0094f5;
+  color: #0094f5;
+  background: #edf7ff;
+  box-shadow: inset 0 0 0 1px rgba(0, 148, 245, 0.15);
+}
+
+.admin-shell {
+  max-width: 1840px;
+  margin: 0 auto;
+  padding: 0 0.35rem 1.25rem;
+}
+
+.admin-card {
+  border: 1px solid #d6e2f2;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(14, 62, 112, 0.08);
+  background: #ffffff;
+}
+
+.admin-shell h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.8rem;
+  color: #163a5c;
+}
+
+.admin-shell > .meta {
+  color: #6a7890;
+  margin-bottom: 0.9rem;
+}
+
+.admin-shell .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0.8rem;
+}
+
+.admin-shell .form-grid textarea {
+  min-height: 110px;
+}
+
+.admin-shell .btn-primary,
+.admin-shell .btn-ghost {
+  min-height: 44px;
+}
+
+.admin-shell .btn-primary {
+  background: linear-gradient(120deg, #0f8ddb, #0a78c5);
+  color: #ffffff;
+  border: 0;
+}
+
+.admin-shell .btn-ghost {
+  border: 1px solid #b7cbe3;
+  background: #f7fbff;
+  color: #2f5f8b;
+}
+
+.admin-subtitle {
+  font-size: 0.92rem;
+  color: #355d86;
+  font-weight: 700;
+  margin-bottom: 0.55rem;
+  padding-left: 0.55rem;
+  border-left: 3px solid #4ba6e9;
+}
+
+.admin-grid {
+  padding: 0.85rem;
+  border: 1px solid #dae5f3;
+  border-radius: 14px;
+  background: #f7fbff;
+}
+
+.admin-grid--banner-create {
+  grid-template-columns: 1.2fr 1fr 1.6fr 1fr auto;
+  align-items: end;
+}
+
+.admin-grid--banner-tune {
+  grid-template-columns: 1fr 1fr 1.2fr 1fr auto 1fr 1fr 1fr;
+  align-items: end;
+}
+
+.admin-grid--checkups {
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  align-items: end;
+}
+
+.admin-grid--doctors {
+  grid-template-columns: 1.4fr 1.2fr 1fr auto;
+  align-items: end;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.admin-list .admin-row {
+  margin: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-list .admin-row:hover {
+  border-color: #b9d3ee;
+  box-shadow: 0 3px 10px rgba(31, 90, 145, 0.08);
+}
+
+.admin-shell .form-grid input,
+.admin-shell .form-grid select,
+.admin-shell .form-grid textarea {
+  border: 1px solid #c7d6ea;
+  background: #ffffff;
+  color: #1e2e46;
+}
+
+.admin-shell .form-grid input:focus,
+.admin-shell .form-grid select:focus,
+.admin-shell .form-grid textarea:focus {
+  outline: none;
+  border-color: #1e9af0;
+  box-shadow: 0 0 0 2px rgba(30, 154, 240, 0.15);
+}
+
 .form-grid textarea {
   min-height: 96px;
   border-radius: 10px;
@@ -1279,6 +1494,13 @@ main {
 
 @media (max-width: 980px) {
   .booking-screen-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid--banner-create,
+  .admin-grid--banner-tune,
+  .admin-grid--checkups,
+  .admin-grid--doctors {
     grid-template-columns: 1fr;
   }
 }
