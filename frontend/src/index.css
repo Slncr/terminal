@@ -514,13 +514,16 @@ main {
 
 .grid-doctors {
   display: grid;
-  grid-template-columns: repeat(3, 581px);
+  width: min(1779px, calc(100vw - 32px));
+  max-width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   justify-content: center;
+  margin: 0 auto;
 }
 
 .doctor-filters {
-  width: 1779px;
+  width: min(1779px, calc(100vw - 32px));
   max-width: 100%;
   margin: 0 auto 1.1rem;
   display: grid;
@@ -587,7 +590,8 @@ main {
 }
 
 .doctor-card {
-  width: 581px;
+  width: 100%;
+  max-width: 581px;
   height: 340px;
   border-radius: 16px;
   border: 1px solid #eff0f1;
@@ -601,7 +605,7 @@ main {
 .doctor-card-info {
   height: 80%;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(170px, 220px) 1fr;
   gap: 1rem;
   padding: 1rem;
 }
@@ -1506,7 +1510,7 @@ main {
 }
 
 .doctors-page-head {
-  width: calc(581px * 3 + 2rem);
+  width: min(1779px, calc(100vw - 32px));
   max-width: 100%;
   margin: 0 auto 1rem;
   position: relative;
