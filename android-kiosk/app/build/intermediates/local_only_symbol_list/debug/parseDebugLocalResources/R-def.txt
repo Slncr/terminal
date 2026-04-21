@@ -1,0 +1,9 @@
+R_DEF: Internal format may change without notice
+local
+id progress
+id webView
+layout activity_main
+string app_name
+string kiosk_url
+style Theme.EurodonKiosk
+xml network_security_config

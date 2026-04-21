@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Eurodon Kiosk</string>
+    <string name="kiosk_url">http://172.191.7.59:8080/</string>
+</resources>

@@ -163,9 +163,28 @@ export type AdminCheckupItem = {
   id: string
   title: string
   subtitle: string | null
+  group_title: string
   price_label: string | null
+  list_image_url: string | null
   image_url: string | null
+  image_fit?: string
+  image_x?: number
+  image_y?: number
+  image_scale?: number
   description: string | null
+  sort_order: number
+  is_active: boolean
+}
+
+export type AdminCheckupGroupTile = {
+  id: string
+  title: string
+  description: string | null
+  image_url: string | null
+  image_fit?: string
+  image_x?: number
+  image_y?: number
+  image_scale?: number
   sort_order: number
   is_active: boolean
 }
@@ -291,5 +310,33 @@ export async function updateAdminCheckup(id: string, body: Omit<AdminCheckupItem
 
 export async function deleteAdminCheckup(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/admin/checkups/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJson(res)
+}
+
+export async function listAdminCheckupGroups(): Promise<AdminCheckupGroupTile[]> {
+  const res = await fetch(`${API_BASE}/admin/checkup-groups`)
+  return parseJson(res)
+}
+
+export async function createAdminCheckupGroup(body: Omit<AdminCheckupGroupTile, 'id'>): Promise<AdminCheckupGroupTile> {
+  const res = await fetch(`${API_BASE}/admin/checkup-groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function updateAdminCheckupGroup(id: string, body: Omit<AdminCheckupGroupTile, 'id'>): Promise<AdminCheckupGroupTile> {
+  const res = await fetch(`${API_BASE}/admin/checkup-groups/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function deleteAdminCheckupGroup(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/checkup-groups/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJson(res)
 }

@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import CheckupItem, ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
+from app.models import CheckupGroupTile, CheckupItem, ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
 from app.schemas import (
     ConsumerDocumentIn,
     ConsumerDocumentOut,
@@ -16,6 +16,8 @@ from app.schemas import (
     DoctorMediaOut,
     HomeTileIn,
     HomeTileOut,
+    CheckupGroupTileIn,
+    CheckupGroupTileOut,
     CheckupItemIn,
     CheckupItemOut,
     PromoBannerIn,
@@ -194,8 +196,14 @@ def update_checkup(checkup_id: str, payload: CheckupItemIn, db: Session = Depend
         raise HTTPException(status_code=404, detail="checkup not found")
     row.title = payload.title
     row.subtitle = payload.subtitle
+    row.group_title = payload.group_title
     row.price_label = payload.price_label
+    row.list_image_url = payload.list_image_url
     row.image_url = payload.image_url
+    row.image_fit = payload.image_fit
+    row.image_x = payload.image_x
+    row.image_y = payload.image_y
+    row.image_scale = payload.image_scale
     row.description = payload.description
     row.sort_order = payload.sort_order
     row.is_active = payload.is_active
@@ -207,5 +215,56 @@ def update_checkup(checkup_id: str, payload: CheckupItemIn, db: Session = Depend
 @router.delete("/checkups/{checkup_id}")
 def delete_checkup(checkup_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
     db.execute(delete(CheckupItem).where(CheckupItem.id == checkup_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/checkup-groups", response_model=list[CheckupGroupTileOut])
+def list_checkup_groups(db: Session = Depends(get_db)) -> list[CheckupGroupTile]:
+    return list(db.scalars(select(CheckupGroupTile).order_by(CheckupGroupTile.sort_order, CheckupGroupTile.title)).all())
+
+
+@router.post("/checkup-groups", response_model=CheckupGroupTileOut)
+def create_or_update_checkup_group(payload: CheckupGroupTileIn, db: Session = Depends(get_db)) -> CheckupGroupTile:
+    row = db.scalars(select(CheckupGroupTile).where(CheckupGroupTile.title == payload.title)).first()
+    if row is None:
+        row = CheckupGroupTile(**payload.model_dump())
+        db.add(row)
+    else:
+        row.description = payload.description
+        row.image_url = payload.image_url
+        row.image_fit = payload.image_fit
+        row.image_x = payload.image_x
+        row.image_y = payload.image_y
+        row.image_scale = payload.image_scale
+        row.sort_order = payload.sort_order
+        row.is_active = payload.is_active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/checkup-groups/{group_id}", response_model=CheckupGroupTileOut)
+def update_checkup_group(group_id: str, payload: CheckupGroupTileIn, db: Session = Depends(get_db)) -> CheckupGroupTile:
+    row = db.get(CheckupGroupTile, group_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="checkup group not found")
+    row.title = payload.title
+    row.description = payload.description
+    row.image_url = payload.image_url
+    row.image_fit = payload.image_fit
+    row.image_x = payload.image_x
+    row.image_y = payload.image_y
+    row.image_scale = payload.image_scale
+    row.sort_order = payload.sort_order
+    row.is_active = payload.is_active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/checkup-groups/{group_id}")
+def delete_checkup_group(group_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+    db.execute(delete(CheckupGroupTile).where(CheckupGroupTile.id == group_id))
     db.commit()
     return {"ok": True}

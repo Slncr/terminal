@@ -146,14 +146,38 @@ class DoctorMediaOut(DoctorMediaIn):
 class CheckupItemIn(BaseModel):
     title: str
     subtitle: str | None = None
+    group_title: str = "Общий"
     price_label: str | None = None
+    list_image_url: str | None = None
     image_url: str | None = None
+    image_fit: str = "cover"
+    image_x: int = 0
+    image_y: int = 0
+    image_scale: int = 100
     description: str | None = None
     sort_order: int = 0
     is_active: bool = True
 
 
 class CheckupItemOut(CheckupItemIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class CheckupGroupTileIn(BaseModel):
+    title: str
+    description: str | None = None
+    image_url: str | None = None
+    image_fit: str = "cover"
+    image_x: int = 0
+    image_y: int = 0
+    image_scale: int = 100
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class CheckupGroupTileOut(CheckupGroupTileIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

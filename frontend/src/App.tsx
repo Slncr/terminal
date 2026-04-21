@@ -3,10 +3,12 @@ import {
   createAppointment,
   createAdminBanner,
   createAdminCheckup,
+  createAdminCheckupGroup,
   createAdminDocument,
   createAdminTile,
   deleteAdminBanner,
   deleteAdminCheckup,
+  deleteAdminCheckupGroup,
   deleteAdminDocument,
   deleteAdminDoctorMedia,
   deleteAdminTile,
@@ -18,14 +20,17 @@ import {
   getAppointment,
   listAdminBanners,
   listAdminCheckups,
+  listAdminCheckupGroups,
   listAdminDoctorMedia,
   listAdminDocuments,
   listAdminTiles,
   uploadAdminFile,
   updateAdminBanner,
   updateAdminCheckup,
+  updateAdminCheckupGroup,
   upsertAdminDoctorMedia,
   type AdminBanner,
+  type AdminCheckupGroupTile,
   type AdminDoctorMedia,
   type AdminDocument,
   type AdminCheckupItem,
@@ -65,6 +70,7 @@ type MainView =
   | { kind: 'promos' }
   | { kind: 'promo'; banner: AdminBanner }
   | { kind: 'checkups' }
+  | { kind: 'checkup-group'; groupTitle: string }
   | { kind: 'checkup'; item: AdminCheckupItem }
 
 const DIAGNOSTIC_GROUPS: DoctorGroup[] = [
@@ -127,17 +133,19 @@ export default function App() {
   const [documents, setDocuments] = useState<AdminDocument[]>([])
   const [banners, setBanners] = useState<AdminBanner[]>([])
   const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
+  const [checkupGroups, setCheckupGroups] = useState<AdminCheckupGroupTile[]>([])
   const [doctorMedia, setDoctorMedia] = useState<Record<string, string>>({})
 
   const refreshMeta = useCallback(async () => {
     try {
-      const [d, st, t, docs, b, c, dm] = await Promise.all([
+      const [d, st, t, docs, b, c, cg, dm] = await Promise.all([
         fetchDoctors(),
         fetchSyncStatus(),
         listAdminTiles(),
         listAdminDocuments(),
         listAdminBanners(),
         listAdminCheckups(),
+        listAdminCheckupGroups(),
         listAdminDoctorMedia(),
       ])
       setDoctors(d)
@@ -146,6 +154,7 @@ export default function App() {
       setDocuments(docs.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setBanners(b.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setCheckups(c.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
+      setCheckupGroups(cg.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       const map: Record<string, string> = {}
       for (const row of dm) map[row.employee_mis_id] = row.photo_url
       setDoctorMedia(map)
@@ -216,10 +225,23 @@ export default function App() {
           <PromoDetails banner={view.banner} onBack={() => setView({ kind: 'promos' })} />
         )}
         {!loading && view.kind === 'checkups' && (
-          <CheckupGrid items={checkups} onBack={() => setView({ kind: 'home' })} onPick={(item) => setView({ kind: 'checkup', item })} />
+          <CheckupGroups
+            items={checkups}
+            groupTiles={checkupGroups}
+            onBack={() => setView({ kind: 'home' })}
+            onPickGroup={(groupTitle) => setView({ kind: 'checkup-group', groupTitle })}
+          />
+        )}
+        {!loading && view.kind === 'checkup-group' && (
+          <CheckupGrid
+            title={view.groupTitle}
+            items={checkups.filter((x) => (x.group_title || 'Общий') === view.groupTitle)}
+            onBack={() => setView({ kind: 'checkups' })}
+            onPick={(item) => setView({ kind: 'checkup', item })}
+          />
         )}
         {!loading && view.kind === 'checkup' && (
-          <CheckupDetails item={view.item} onBack={() => setView({ kind: 'checkups' })} />
+          <CheckupDetails item={view.item} onBack={() => setView({ kind: 'checkup-group', groupTitle: view.item.group_title || 'Общий' })} />
         )}
         {!loading && view.kind === 'doctors' && (
           <DoctorGrid
@@ -713,6 +735,7 @@ function PromoGrid({
           ))}
         </div>
       )}
+      <PromoInfoNote />
     </>
   )
 }
@@ -735,15 +758,155 @@ function PromoDetails({ banner, onBack }: { banner: AdminBanner; onBack: () => v
           <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
         </div>
       </section>
+      <PromoInfoNote />
+    </>
+  )
+}
+
+function PromoInfoNote() {
+  return (
+    <div className="promo-info-note">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden>
+        <circle cx="13" cy="13" r="12.1" stroke="#0094F5" strokeWidth="1.8" />
+      </svg>
+      <span>Все акции и предложения проводится в Евродон Социалистическая</span>
+    </div>
+  )
+}
+
+function CheckupGroups({
+  items,
+  groupTiles,
+  onBack,
+  onPickGroup,
+}: {
+  items: AdminCheckupItem[]
+  groupTiles: AdminCheckupGroupTile[]
+  onBack: () => void
+  onPickGroup: (groupTitle: string) => void
+}) {
+  const defaultGroupOrder = ['Общий', 'Мужской', 'Женский', 'Детский', 'Госпитальный']
+  const groups = useMemo(() => {
+    const countMap = new Map<string, number>()
+    for (const item of items) {
+      const key = (item.group_title || 'Общий').trim() || 'Общий'
+      countMap.set(key, (countMap.get(key) ?? 0) + 1)
+    }
+    const normalized = groupTiles.map((x) => ({
+      groupTitle: x.title,
+      description: x.description ?? '',
+      image: x.image_url ?? null,
+      image_fit: x.image_fit ?? 'cover',
+      image_x: Number(x.image_x ?? 0),
+      image_y: Number(x.image_y ?? 0),
+      image_scale: Number(x.image_scale ?? 100),
+      count: countMap.get(x.title) ?? 0,
+      sort_order: x.sort_order,
+    }))
+    for (const key of defaultGroupOrder) {
+      if (!normalized.some((x) => x.groupTitle.toLowerCase() === key.toLowerCase())) {
+        normalized.push({
+          groupTitle: key,
+          description: '',
+          image: null,
+          image_fit: 'cover',
+          image_x: 0,
+          image_y: 0,
+          image_scale: 100,
+          count: countMap.get(key) ?? 0,
+          sort_order: 999,
+        })
+      }
+    }
+    return normalized.sort((a, b) => {
+      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      const ai = defaultGroupOrder.findIndex((x) => x.toLowerCase() === a.groupTitle.toLowerCase())
+      const bi = defaultGroupOrder.findIndex((x) => x.toLowerCase() === b.groupTitle.toLowerCase())
+      const av = ai === -1 ? 999 : ai
+      const bv = bi === -1 ? 999 : bi
+      return av - bv || a.groupTitle.localeCompare(b.groupTitle, 'ru')
+    })
+  }, [items, groupTiles])
+
+  return (
+    <>
+      <div className="doctors-page-head">
+        <button type="button" className="back-chip-btn" onClick={onBack}>
+          <span aria-hidden>←</span> Назад
+        </button>
+        <h2>Программы Check-up</h2>
+      </div>
+      <div className="checkup-groups-grid">
+        <div className="checkup-groups-row checkup-groups-row-top">
+          {groups.slice(0, 3).map((g) => (
+            <button
+              key={g.groupTitle}
+              type="button"
+              className={`checkup-group-card checkup-group-card--top ${g.groupTitle.toLowerCase().includes('муж') ? 'checkup-group-card--male' : ''} ${
+                g.groupTitle.toLowerCase().includes('жен') ? 'checkup-group-card--female' : ''
+              } ${g.groupTitle.toLowerCase().includes('дет') ? 'checkup-group-card--kids' : ''} ${
+                g.groupTitle.toLowerCase().includes('госпитал') ? 'checkup-group-card--hospital' : ''
+              }`}
+              onClick={() => onPickGroup(g.groupTitle)}
+            >
+              <div className="checkup-group-card-title">{g.groupTitle}</div>
+              <div className="checkup-group-card-subtitle">{g.description || `${g.count} программ`}</div>
+              <span className="checkup-group-card-more">Подробнее</span>
+              {g.image && (
+                <img
+                  src={g.image}
+                  alt={g.groupTitle}
+                  className="checkup-group-card-image"
+                  style={{
+                    objectFit: g.image_fit === 'contain' ? 'contain' : 'cover',
+                    transform: `translate(${g.image_x}px, ${g.image_y}px) scale(${Math.max(0.2, g.image_scale / 100)})`,
+                  }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="checkup-groups-row checkup-groups-row-bottom">
+          {groups.slice(3, 5).map((g) => (
+          <button
+            key={g.groupTitle}
+            type="button"
+            className={`checkup-group-card checkup-group-card--bottom ${g.groupTitle.toLowerCase().includes('муж') ? 'checkup-group-card--male' : ''} ${
+              g.groupTitle.toLowerCase().includes('жен') ? 'checkup-group-card--female' : ''
+            } ${g.groupTitle.toLowerCase().includes('дет') ? 'checkup-group-card--kids' : ''} ${
+              g.groupTitle.toLowerCase().includes('госпитал') ? 'checkup-group-card--hospital' : ''
+            }`}
+            onClick={() => onPickGroup(g.groupTitle)}
+          >
+            <div className="checkup-group-card-title">{g.groupTitle}</div>
+            <div className="checkup-group-card-subtitle">{g.description || `${g.count} программ`}</div>
+            <span className="checkup-group-card-more">Подробнее</span>
+            {g.image && (
+              <img
+                src={g.image}
+                alt={g.groupTitle}
+                className="checkup-group-card-image"
+                style={{
+                  objectFit: g.image_fit === 'contain' ? 'contain' : 'cover',
+                  transform: `translate(${g.image_x}px, ${g.image_y}px) scale(${Math.max(0.2, g.image_scale / 100)})`,
+                }}
+              />
+            )}
+          </button>
+        ))}
+        </div>
+      </div>
     </>
   )
 }
 
 function CheckupGrid({
+  title,
   items,
   onBack,
   onPick,
 }: {
+  title: string
   items: AdminCheckupItem[]
   onBack: () => void
   onPick: (item: AdminCheckupItem) => void
@@ -754,15 +917,19 @@ function CheckupGrid({
         <button type="button" className="back-chip-btn" onClick={onBack}>
           <span aria-hidden>←</span> Назад
         </button>
-        <h2>Программы Check-up</h2>
+        <h2>{`Программы Check-up (${title})`}</h2>
       </div>
-      <div className="checkup-group-title">Общий</div>
-      <div className="checkup-grid">
+      <div className="checkup-grid-cards">
         {items.map((item) => (
-          <button key={item.id} type="button" className="checkup-row" onClick={() => onPick(item)}>
-            <span className="checkup-icon">◧</span>
-            <span className="checkup-name">{item.title}</span>
-            <span className="checkup-price">{item.price_label || ''}</span>
+          <button key={item.id} type="button" className="checkup-list-card" onClick={() => onPick(item)}>
+            <div className="checkup-list-card-image-wrap">
+              {item.list_image_url || item.image_url ? (
+                <img src={item.list_image_url || item.image_url || ''} alt={item.title} className="checkup-list-card-image" />
+              ) : (
+                <div className="checkup-list-card-empty">Изображение</div>
+              )}
+            </div>
+            <div className="checkup-list-card-title">{item.title}</div>
           </button>
         ))}
       </div>
@@ -777,17 +944,29 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
         <button type="button" className="back-chip-btn" onClick={onBack}>
           <span aria-hidden>←</span> Назад
         </button>
-        <h2>Программы Check-up</h2>
+        <h2>{`Чекап "${item.title}"`}</h2>
       </div>
-      <section className="promo-details">
-        <h3>{item.title}</h3>
-        {item.image_url && (
-          <div className="promo-details-image-wrap">
-            <img src={item.image_url} alt={item.title} className="promo-details-image" />
+      <section className="checkup-details">
+        <div className="checkup-details-top">
+          <div className="checkup-details-texts">
+            <h3>Описание услуги</h3>
+            <div className="promo-details-text">{item.description?.trim() || 'Описание программы скоро появится.'}</div>
+            {item.price_label && <div className="checkup-details-price">{item.price_label}</div>}
           </div>
-        )}
-        {item.price_label && <div className="meta" style={{ marginBottom: '0.6rem' }}>{item.price_label}</div>}
-        <div className="promo-details-text">{item.description?.trim() || 'Описание программы скоро появится.'}</div>
+          {item.image_url && (
+            <div className="checkup-details-image-wrap">
+              <img
+                src={item.image_url}
+                alt={item.title}
+                className="checkup-details-image"
+                style={{
+                  objectFit: item.image_fit === 'contain' ? 'contain' : 'cover',
+                  transform: `translate(${Number(item.image_x ?? 0)}px, ${Number(item.image_y ?? 0)}px) scale(${Math.max(0.2, Number(item.image_scale ?? 100) / 100)})`,
+                }}
+              />
+            </div>
+          )}
+        </div>
       </section>
     </>
   )
@@ -842,7 +1021,9 @@ function DoctorGrid({
         <div className="doctor-filter-field">
           <div className="doctor-search-wrap">
             <span className="doctor-search-icon" aria-hidden>
-              🔍
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M18.3 18.3L25.5 25.5M20.7 11.1C20.7 16.4019 16.4019 20.7 11.1 20.7C5.79807 20.7 1.5 16.4019 1.5 11.1C1.5 5.79807 5.79807 1.5 11.1 1.5C16.4019 1.5 20.7 5.79807 20.7 11.1Z" stroke="#9AA2B3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </span>
             <input
               value={query}
@@ -853,7 +1034,7 @@ function DoctorGrid({
         </div>
         <div className="doctor-filter-field">
           <select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-            <option value="">Направления</option>
+            <option value="">Все направления</option>
             {specialties.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -878,7 +1059,6 @@ function DoctorGrid({
               <div className="doctor-card-text">
                 {d.specialty && <div className="doctor-card-specialty">{d.specialty}</div>}
                 <h2 className="doctor-card-name">{d.full_name}</h2>
-                <div className="doctor-card-exp">Стаж работы</div>
               </div>
             </div>
             <button type="button" className="doctor-card-btn" onClick={() => onPick(d)}>
@@ -1436,6 +1616,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [documents, setDocuments] = useState<AdminDocument[]>([])
   const [banners, setBanners] = useState<AdminBanner[]>([])
   const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
+  const [checkupGroupTiles, setCheckupGroupTiles] = useState<AdminCheckupGroupTile[]>([])
   const [media, setMedia] = useState<AdminDoctorMedia[]>([])
   const [status, setStatus] = useState<string>('')
 
@@ -1467,27 +1648,44 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
 
   const [checkupTitle, setCheckupTitle] = useState('')
   const [checkupSubtitle, setCheckupSubtitle] = useState('')
+  const [checkupGroupTitle, setCheckupGroupTitle] = useState('Общий')
   const [checkupPrice, setCheckupPrice] = useState('')
+  const [checkupListImage, setCheckupListImage] = useState('')
   const [checkupImage, setCheckupImage] = useState('')
+  const [checkupImageFit, setCheckupImageFit] = useState<'cover' | 'contain'>('cover')
+  const [checkupImageX, setCheckupImageX] = useState(0)
+  const [checkupImageY, setCheckupImageY] = useState(0)
+  const [checkupImageScale, setCheckupImageScale] = useState(100)
   const [checkupDescription, setCheckupDescription] = useState('')
   const [checkupSort, setCheckupSort] = useState(0)
   const [checkupEditId, setCheckupEditId] = useState('')
+  const [checkupGroupEditId, setCheckupGroupEditId] = useState('')
+  const [checkupGroupTileTitle, setCheckupGroupTileTitle] = useState('Общий')
+  const [checkupGroupTileDescription, setCheckupGroupTileDescription] = useState('')
+  const [checkupGroupTileImage, setCheckupGroupTileImage] = useState('')
+  const [checkupGroupTileFit, setCheckupGroupTileFit] = useState<'cover' | 'contain'>('cover')
+  const [checkupGroupTileX, setCheckupGroupTileX] = useState(0)
+  const [checkupGroupTileY, setCheckupGroupTileY] = useState(0)
+  const [checkupGroupTileScale, setCheckupGroupTileScale] = useState(100)
+  const [checkupGroupTileSort, setCheckupGroupTileSort] = useState(0)
 
   const [doctorId, setDoctorId] = useState('')
   const [doctorPhoto, setDoctorPhoto] = useState('')
 
   const reload = useCallback(async () => {
-    const [t, d, b, c, m] = await Promise.all([
+    const [t, d, b, c, cg, m] = await Promise.all([
       listAdminTiles(),
       listAdminDocuments(),
       listAdminBanners(),
       listAdminCheckups(),
+      listAdminCheckupGroups(),
       listAdminDoctorMedia(),
     ])
     setTiles(t)
     setDocuments(d)
     setBanners(b)
     setCheckups(c)
+    setCheckupGroupTiles(cg)
     setMedia(m)
   }, [])
 
@@ -1526,16 +1724,37 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     () => checkups.find((x) => x.id === checkupEditId) ?? null,
     [checkups, checkupEditId],
   )
+  const selectedCheckupGroupTile = useMemo(
+    () => checkupGroupTiles.find((x) => x.id === checkupGroupEditId) ?? null,
+    [checkupGroupTiles, checkupGroupEditId],
+  )
 
   useEffect(() => {
     if (!selectedCheckup) return
     setCheckupTitle(selectedCheckup.title)
     setCheckupSubtitle(selectedCheckup.subtitle ?? '')
+    setCheckupGroupTitle(selectedCheckup.group_title || 'Общий')
     setCheckupPrice(selectedCheckup.price_label ?? '')
+    setCheckupListImage(selectedCheckup.list_image_url ?? '')
     setCheckupImage(selectedCheckup.image_url ?? '')
+    setCheckupImageFit(selectedCheckup.image_fit === 'contain' ? 'contain' : 'cover')
+    setCheckupImageX(Number(selectedCheckup.image_x ?? 0))
+    setCheckupImageY(Number(selectedCheckup.image_y ?? 0))
+    setCheckupImageScale(Number(selectedCheckup.image_scale ?? 100))
     setCheckupDescription(selectedCheckup.description ?? '')
     setCheckupSort(Number(selectedCheckup.sort_order ?? 0))
   }, [selectedCheckup?.id])
+  useEffect(() => {
+    if (!selectedCheckupGroupTile) return
+    setCheckupGroupTileTitle(selectedCheckupGroupTile.title)
+    setCheckupGroupTileDescription(selectedCheckupGroupTile.description ?? '')
+    setCheckupGroupTileImage(selectedCheckupGroupTile.image_url ?? '')
+    setCheckupGroupTileFit(selectedCheckupGroupTile.image_fit === 'contain' ? 'contain' : 'cover')
+    setCheckupGroupTileX(Number(selectedCheckupGroupTile.image_x ?? 0))
+    setCheckupGroupTileY(Number(selectedCheckupGroupTile.image_y ?? 0))
+    setCheckupGroupTileScale(Number(selectedCheckupGroupTile.image_scale ?? 100))
+    setCheckupGroupTileSort(Number(selectedCheckupGroupTile.sort_order ?? 0))
+  }, [selectedCheckupGroupTile?.id])
 
   const tilePreset = useMemo(
     () => FIXED_TILE_PRESETS.find((x) => x.key === tilePresetKey) ?? FIXED_TILE_PRESETS[0],
@@ -2057,6 +2276,140 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
       {adminTab === 'checkups' && (
       <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <h2>Контент страницы Check-up</h2>
+        <div className="admin-subtitle">Плитки главного экрана Check-up</div>
+        <div className="form-grid admin-grid admin-grid--checkups" style={{ marginBottom: '0.85rem' }}>
+          <label>
+            Плитка для редактирования
+            <select value={checkupGroupEditId} onChange={(e) => setCheckupGroupEditId(e.target.value)}>
+              <option value="">Новая плитка</option>
+              {checkupGroupTiles.map((x) => (
+                <option key={x.id} value={x.id}>{x.title}</option>
+              ))}
+            </select>
+          </label>
+          <input placeholder="Заголовок плитки" value={checkupGroupTileTitle} onChange={(e) => setCheckupGroupTileTitle(e.target.value)} />
+          <input placeholder="Описание плитки" value={checkupGroupTileDescription} onChange={(e) => setCheckupGroupTileDescription(e.target.value)} />
+          <label>
+            Подгонка картинки плитки
+            <select value={checkupGroupTileFit} onChange={(e) => setCheckupGroupTileFit(e.target.value as 'cover' | 'contain')}>
+              <option value="cover">Заполнить (cover)</option>
+              <option value="contain">Вписать (contain)</option>
+            </select>
+          </label>
+          <input placeholder="URL картинки плитки" value={checkupGroupTileImage} onChange={(e) => setCheckupGroupTileImage(e.target.value)} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const url = await uploadAdminFile(file, 'checkups')
+              setCheckupGroupTileImage(url)
+            }}
+          />
+          <input
+            type="number"
+            placeholder="Порядок"
+            value={checkupGroupTileSort}
+            onChange={(e) => setCheckupGroupTileSort(Number(e.target.value) || 0)}
+          />
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              const payload = {
+                title: checkupGroupTileTitle.trim() || 'Общий',
+                description: checkupGroupTileDescription || null,
+                image_url: checkupGroupTileImage || null,
+                image_fit: checkupGroupTileFit,
+                image_x: checkupGroupTileX,
+                image_y: checkupGroupTileY,
+                image_scale: checkupGroupTileScale,
+                sort_order: checkupGroupTileSort,
+                is_active: true,
+              }
+              if (checkupGroupEditId) {
+                await updateAdminCheckupGroup(checkupGroupEditId, payload)
+                setStatus('Плитка главного экрана Check-up обновлена')
+              } else {
+                await createAdminCheckupGroup(payload)
+                setStatus('Плитка главного экрана Check-up добавлена')
+              }
+              setCheckupGroupEditId('')
+              setCheckupGroupTileTitle('Общий')
+              setCheckupGroupTileDescription('')
+              setCheckupGroupTileImage('')
+              setCheckupGroupTileFit('cover')
+              setCheckupGroupTileX(0)
+              setCheckupGroupTileY(0)
+              setCheckupGroupTileScale(100)
+              setCheckupGroupTileSort(0)
+              await reload()
+            }}
+            disabled={!checkupGroupTileTitle.trim()}
+          >
+            {checkupGroupEditId ? 'Сохранить плитку' : 'Добавить плитку'}
+          </button>
+          <label>
+            Смещение X: {checkupGroupTileX}px
+            <input type="range" min={-300} max={300} value={checkupGroupTileX} onChange={(e) => setCheckupGroupTileX(Number(e.target.value))} />
+          </label>
+          <label>
+            Смещение Y: {checkupGroupTileY}px
+            <input type="range" min={-300} max={300} value={checkupGroupTileY} onChange={(e) => setCheckupGroupTileY(Number(e.target.value))} />
+          </label>
+          <label>
+            Масштаб: {checkupGroupTileScale}%
+            <input type="range" min={40} max={220} value={checkupGroupTileScale} onChange={(e) => setCheckupGroupTileScale(Number(e.target.value))} />
+          </label>
+        </div>
+        <div className="tile-preview-wrap" style={{ marginTop: '0.55rem' }}>
+          <div className="meta">Предпросмотр плитки главного экрана Check-up</div>
+          <button type="button" className="checkup-group-card checkup-group-card--top" style={{ pointerEvents: 'none' }}>
+            <div className="checkup-group-card-title">{checkupGroupTileTitle || 'Заголовок'}</div>
+            <div className="checkup-group-card-subtitle">{checkupGroupTileDescription || 'Описание плитки'}</div>
+            <span className="checkup-group-card-more">Подробнее</span>
+            {checkupGroupTileImage && (
+              <img
+                src={checkupGroupTileImage}
+                alt=""
+                className="checkup-group-card-image"
+                style={{
+                  objectFit: checkupGroupTileFit,
+                  transform: `translate(${checkupGroupTileX}px, ${checkupGroupTileY}px) scale(${Math.max(0.2, checkupGroupTileScale / 100)})`,
+                }}
+              />
+            )}
+          </button>
+        </div>
+        <div className="meta">Плиток главного экрана: {checkupGroupTiles.length}</div>
+        {checkupGroupTiles.length > 0 && (
+          <div className="admin-list" style={{ marginTop: '0.55rem', marginBottom: '0.75rem' }}>
+            {checkupGroupTiles.map((x) => (
+              <div key={x.id} className="admin-row">
+                <div>
+                  <strong>{x.title}</strong>
+                  {x.description && <div className="meta">{x.description}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="button" className="btn-ghost" onClick={() => setCheckupGroupEditId(x.id)}>Редактировать</button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={async () => {
+                      await deleteAdminCheckupGroup(x.id)
+                      setStatus('Плитка главного экрана удалена')
+                      if (checkupGroupEditId === x.id) setCheckupGroupEditId('')
+                      await reload()
+                    }}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="admin-subtitle">Список программ внутри плиток</div>
         <div className="form-grid admin-grid admin-grid--checkups">
           <label>
             Запись для редактирования
@@ -2069,8 +2422,27 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </label>
           <input placeholder="Заголовок" value={checkupTitle} onChange={(e) => setCheckupTitle(e.target.value)} />
           <input placeholder="Подзаголовок (необязательно)" value={checkupSubtitle} onChange={(e) => setCheckupSubtitle(e.target.value)} />
+          <input placeholder="Плитка/группа (например: Общий, Мужской, Женский)" value={checkupGroupTitle} onChange={(e) => setCheckupGroupTitle(e.target.value)} />
           <input placeholder="Цена / подпись справа" value={checkupPrice} onChange={(e) => setCheckupPrice(e.target.value)} />
+          <input placeholder="URL картинки карточки на общем экране" value={checkupListImage} onChange={(e) => setCheckupListImage(e.target.value)} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const url = await uploadAdminFile(file, 'checkups')
+              setCheckupListImage(url)
+            }}
+          />
           <input placeholder="URL картинки для детальной страницы" value={checkupImage} onChange={(e) => setCheckupImage(e.target.value)} />
+          <label>
+            Подгонка картинки детальной страницы
+            <select value={checkupImageFit} onChange={(e) => setCheckupImageFit(e.target.value as 'cover' | 'contain')}>
+              <option value="cover">Заполнить (cover)</option>
+              <option value="contain">Вписать (contain)</option>
+            </select>
+          </label>
           <input
             type="file"
             accept="image/*"
@@ -2094,8 +2466,14 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               const payload = {
                 title: checkupTitle,
                 subtitle: checkupSubtitle || null,
+                group_title: checkupGroupTitle.trim() || 'Общий',
                 price_label: checkupPrice || null,
+                list_image_url: checkupListImage || null,
                 image_url: checkupImage || null,
+                image_fit: checkupImageFit,
+                image_x: checkupImageX,
+                image_y: checkupImageY,
+                image_scale: checkupImageScale,
                 description: checkupDescription || null,
                 sort_order: checkupSort,
                 is_active: true,
@@ -2110,8 +2488,14 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               setCheckupEditId('')
               setCheckupTitle('')
               setCheckupSubtitle('')
+              setCheckupGroupTitle('Общий')
               setCheckupPrice('')
+              setCheckupListImage('')
               setCheckupImage('')
+              setCheckupImageFit('cover')
+              setCheckupImageX(0)
+              setCheckupImageY(0)
+              setCheckupImageScale(100)
               setCheckupDescription('')
               setCheckupSort(0)
               await reload()
@@ -2120,6 +2504,51 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           >
             {checkupEditId ? 'Сохранить изменения' : 'Добавить программу'}
           </button>
+          <label>
+            Смещение X (детальная): {checkupImageX}px
+            <input type="range" min={-300} max={300} value={checkupImageX} onChange={(e) => setCheckupImageX(Number(e.target.value))} />
+          </label>
+          <label>
+            Смещение Y (детальная): {checkupImageY}px
+            <input type="range" min={-300} max={300} value={checkupImageY} onChange={(e) => setCheckupImageY(Number(e.target.value))} />
+          </label>
+          <label>
+            Масштаб (детальная): {checkupImageScale}%
+            <input type="range" min={40} max={220} value={checkupImageScale} onChange={(e) => setCheckupImageScale(Number(e.target.value))} />
+          </label>
+        </div>
+        <div className="tile-preview-wrap" style={{ marginTop: '0.75rem' }}>
+          <div className="meta">Полный предпросмотр страницы чекапа</div>
+          <div className="checkup-preview-full">
+            <div className="doctors-page-head">
+              <button type="button" className="back-chip-btn" disabled>
+                <span aria-hidden>←</span> Назад
+              </button>
+              <h2>{`Чекап "${checkupTitle || 'Новый'}"`}</h2>
+            </div>
+            <section className="checkup-details">
+              <div className="checkup-details-top">
+                <div className="checkup-details-texts">
+                  <h3>Описание услуги</h3>
+                  <div className="promo-details-text">{checkupDescription || 'Описание программы'}</div>
+                  {checkupPrice && <div className="checkup-details-price">{checkupPrice}</div>}
+                </div>
+                {(checkupImage || checkupListImage) && (
+                  <div className="checkup-details-image-wrap">
+                    <img
+                      src={checkupImage || checkupListImage}
+                      alt=""
+                      className="checkup-details-image"
+                      style={{
+                        objectFit: checkupImageFit,
+                        transform: `translate(${checkupImageX}px, ${checkupImageY}px) scale(${Math.max(0.2, checkupImageScale / 100)})`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
         <div className="meta">Программ: {checkups.length}</div>
         {checkups.length > 0 && (
@@ -2128,6 +2557,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               <div key={x.id} className="admin-row">
                 <div>
                   <strong>{x.title}</strong>
+                  <div className="meta">{x.group_title}</div>
                   {x.price_label && <div className="meta">{x.price_label}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
