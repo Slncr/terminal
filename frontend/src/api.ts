@@ -157,6 +157,7 @@ export type AdminDoctorMedia = {
   id: string
   employee_mis_id: string
   photo_url: string
+  experience_label: string | null
 }
 
 export type AdminCheckupItem = {
@@ -276,7 +277,11 @@ export async function listAdminDoctorMedia(): Promise<AdminDoctorMedia[]> {
   return parseJson(res)
 }
 
-export async function upsertAdminDoctorMedia(body: { employee_mis_id: string; photo_url: string }): Promise<AdminDoctorMedia> {
+export async function upsertAdminDoctorMedia(body: {
+  employee_mis_id: string
+  photo_url: string
+  experience_label?: string | null
+}): Promise<AdminDoctorMedia> {
   const res = await fetch(`${API_BASE}/admin/doctor-media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

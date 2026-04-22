@@ -163,6 +163,7 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
         db.add(existing)
     else:
         existing.photo_url = payload.photo_url
+        existing.experience_label = payload.experience_label
     db.commit()
     db.refresh(existing)
     return existing

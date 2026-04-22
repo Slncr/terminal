@@ -676,6 +676,14 @@ main {
   overflow-wrap: anywhere;
 }
 
+.doctor-card-experience {
+  margin-top: 0.55rem;
+  color: #9aa2b3;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 400;
+}
+
 .doctor-card-btn {
   margin: auto 0.85rem 0.85rem;
   width: calc(100% - 1.7rem);
@@ -1551,7 +1559,7 @@ main {
   display: grid;
   grid-template-columns: 1fr 714px;
   min-height: 341px;
-  background: #f5f6fa;
+  background: #ffffff;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -1596,9 +1604,11 @@ main {
 }
 
 .checkup-details-extra {
-  border-top: 0;
+  border: 1px solid #dce5f3;
   padding: 0.95rem 1.2rem 1.1rem;
-  background: #ffffff;
+  background: #f5f6fa;
+  border-radius: 18px;
+  margin-top: 0.7rem;
 }
 
 .checkup-details-extra-title {

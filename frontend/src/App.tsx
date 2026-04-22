@@ -149,7 +149,7 @@ export default function App() {
   const [banners, setBanners] = useState<AdminBanner[]>([])
   const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
   const [checkupGroups, setCheckupGroups] = useState<AdminCheckupGroupTile[]>([])
-  const [doctorMedia, setDoctorMedia] = useState<Record<string, string>>({})
+  const [doctorMedia, setDoctorMedia] = useState<Record<string, AdminDoctorMedia>>({})
 
   const refreshMeta = useCallback(async () => {
     try {
@@ -170,8 +170,8 @@ export default function App() {
       setBanners(b.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setCheckups(c.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setCheckupGroups(cg.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
-      const map: Record<string, string> = {}
-      for (const row of dm) map[row.employee_mis_id] = row.photo_url
+      const map: Record<string, AdminDoctorMedia> = {}
+      for (const row of dm) map[row.employee_mis_id] = row
       setDoctorMedia(map)
       setLoadError(null)
     } catch (e) {
@@ -276,7 +276,7 @@ export default function App() {
         {!loading && view.kind === 'doctor' && (
           <DoctorSchedule
             doctor={view.doctor}
-            doctorPhoto={doctorMedia[view.doctor.mis_id]}
+            doctorPhoto={doctorMedia[view.doctor.mis_id]?.photo_url}
             onBack={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
             onBooked={() => {
               void refreshMeta()
@@ -1050,7 +1050,7 @@ function DoctorGrid({
   onPick,
 }: {
   doctors: Employee[]
-  doctorMedia: Record<string, string>
+  doctorMedia: Record<string, AdminDoctorMedia>
   onBack: () => void
   onPick: (d: Employee) => void
 }) {
@@ -1125,11 +1125,14 @@ function DoctorGrid({
             <div className="doctor-card-info">
               <div
                 className="doctor-card-photo"
-                style={doctorMedia[d.mis_id] ? { backgroundImage: `url(${doctorMedia[d.mis_id]})` } : undefined}
+                style={doctorMedia[d.mis_id]?.photo_url ? { backgroundImage: `url(${doctorMedia[d.mis_id].photo_url})` } : undefined}
               />
               <div className="doctor-card-text">
                 {d.specialty && <div className="doctor-card-specialty">{d.specialty}</div>}
                 <h2 className="doctor-card-name">{d.full_name}</h2>
+                {doctorMedia[d.mis_id]?.experience_label && (
+                  <div className="doctor-card-experience">Стаж работы: {doctorMedia[d.mis_id].experience_label}</div>
+                )}
               </div>
             </div>
             <button type="button" className="doctor-card-btn" onClick={() => onPick(d)}>
@@ -1794,6 +1797,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
 
   const [doctorId, setDoctorId] = useState('')
   const [doctorPhoto, setDoctorPhoto] = useState('')
+  const [doctorExperience, setDoctorExperience] = useState('')
 
   const reload = useCallback(async () => {
     const [t, d, b, c, cg, m] = await Promise.all([
@@ -1931,6 +1935,17 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setTileScale(existingTileImage?.image_scale ?? 100)
     setTileImage('')
   }, [tilePresetKey, existingTileImage?.id])
+
+  useEffect(() => {
+    if (!doctorId) {
+      setDoctorPhoto('')
+      setDoctorExperience('')
+      return
+    }
+    const selected = media.find((m) => m.employee_mis_id === doctorId)
+    setDoctorPhoto(selected?.photo_url ?? '')
+    setDoctorExperience(selected?.experience_label ?? '')
+  }, [doctorId, media])
 
   return (
     <main className="admin-shell">
@@ -2771,7 +2786,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
 
       {adminTab === 'doctors' && (
       <div className="card admin-card">
-        <h2>Фото в карточках врачей</h2>
+        <h2>Карточки врачей</h2>
         <div className="form-grid admin-grid admin-grid--doctors">
           <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
             <option value="">Выберите врача</option>
@@ -2782,6 +2797,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             ))}
           </select>
           <input placeholder="URL фото" value={doctorPhoto} onChange={(e) => setDoctorPhoto(e.target.value)} />
+          <input
+            placeholder="Стаж работы (например: 12 лет)"
+            value={doctorExperience}
+            onChange={(e) => setDoctorExperience(e.target.value)}
+          />
           <input
             type="file"
             accept="image/*"
@@ -2796,26 +2816,33 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             className="btn-primary"
             onClick={async () => {
               if (!doctorId) return
-              await upsertAdminDoctorMedia({ employee_mis_id: doctorId, photo_url: doctorPhoto })
-              setStatus('Фото врача сохранено')
+              await upsertAdminDoctorMedia({
+                employee_mis_id: doctorId,
+                photo_url: doctorPhoto,
+                experience_label: doctorExperience.trim() || null,
+              })
+              setStatus('Данные врача сохранены')
               await reload()
             }}
           >
-            Сохранить фото врача
+            Сохранить данные врача
           </button>
         </div>
-        <div className="meta">Фото врачей: {media.length}</div>
+        <div className="meta">Карточек с данными: {media.length}</div>
         {media.length > 0 && (
           <div className="admin-list" style={{ marginTop: '0.75rem' }}>
             {media.map((m) => (
               <div key={m.id} className="admin-row">
-                <div className="meta">{m.employee_mis_id}</div>
+                <div>
+                  <div className="meta">{m.employee_mis_id}</div>
+                  {m.experience_label && <div className="meta">Стаж: {m.experience_label}</div>}
+                </div>
                 <button
                   type="button"
                   className="btn-ghost"
                   onClick={async () => {
                     await deleteAdminDoctorMedia(m.employee_mis_id)
-                    setStatus('Фото удалено')
+                    setStatus('Данные удалены')
                     await reload()
                   }}
                 >

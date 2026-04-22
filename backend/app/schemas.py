@@ -135,6 +135,7 @@ class PromoBannerOut(PromoBannerIn):
 class DoctorMediaIn(BaseModel):
     employee_mis_id: str
     photo_url: str
+    experience_label: str | None = None
 
 
 class DoctorMediaOut(DoctorMediaIn):

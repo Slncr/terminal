@@ -187,6 +187,7 @@ class DoctorMedia(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_mis_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.mis_id"), index=True)
     photo_url: Mapped[str] = mapped_column(String(512))
+    experience_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
