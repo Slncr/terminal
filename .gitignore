@@ -11,3 +11,6 @@ dist/
 .coverage
 htmlcov/
 .DS_Store
+
+# Android artifacts (exclude kiosk module from commits)
+android-kiosk/
