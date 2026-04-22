@@ -127,6 +127,15 @@ function startOfDay(d: Date): Date {
   return x
 }
 
+function normalizeCheckupCategory(value: string | null | undefined): string {
+  return (value ?? '').trim().toLocaleLowerCase('ru-RU')
+}
+
+function displayCheckupCategory(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim()
+  return trimmed || 'Общий'
+}
+
 export default function App() {
   const isAdminMode = window.location.pathname.startsWith('/admin')
   const lastSyncSeenRef = useRef<string | null>(null)
@@ -241,13 +250,20 @@ export default function App() {
         {!loading && view.kind === 'checkup-group' && (
           <CheckupGrid
             title={view.groupTitle}
-            items={checkups.filter((x) => (x.group_title || 'Общий') === view.groupTitle)}
+            items={checkups.filter((x) => normalizeCheckupCategory(displayCheckupCategory(x.group_title)) === normalizeCheckupCategory(view.groupTitle))}
             onBack={() => setView({ kind: 'checkups' })}
             onPick={(item) => setView({ kind: 'checkup', item })}
           />
         )}
         {!loading && view.kind === 'checkup' && (
-          <CheckupDetails item={view.item} onBack={() => setView({ kind: 'checkup-group', groupTitle: view.item.group_title || 'Общий' })} />
+          <CheckupDetails
+            item={view.item}
+            onBack={() => {
+              const fallback = displayCheckupCategory(view.item.group_title)
+              const linked = checkupGroups.find((g) => normalizeCheckupCategory(g.title) === normalizeCheckupCategory(fallback))
+              setView({ kind: 'checkup-group', groupTitle: linked?.title || fallback })
+            }}
+          />
         )}
         {!loading && view.kind === 'doctors' && (
           <DoctorGrid
@@ -800,7 +816,7 @@ function CheckupGroups({
   const groups = useMemo(() => {
     const countMap = new Map<string, number>()
     for (const item of items) {
-      const key = (item.group_title || 'Общий').trim() || 'Общий'
+      const key = normalizeCheckupCategory(displayCheckupCategory(item.group_title))
       countMap.set(key, (countMap.get(key) ?? 0) + 1)
     }
     const normalized = groupTiles.map((x) => ({
@@ -811,7 +827,7 @@ function CheckupGroups({
       image_x: Number(x.image_x ?? 0),
       image_y: Number(x.image_y ?? 0),
       image_scale: Number(x.image_scale ?? 100),
-      count: countMap.get(x.title) ?? 0,
+      count: countMap.get(normalizeCheckupCategory(x.title)) ?? 0,
       sort_order: x.sort_order,
     }))
     for (const key of defaultGroupOrder) {
@@ -824,7 +840,7 @@ function CheckupGroups({
           image_x: 0,
           image_y: 0,
           image_scale: 100,
-          count: countMap.get(key) ?? 0,
+          count: countMap.get(normalizeCheckupCategory(key)) ?? 0,
           sort_order: 999,
         })
       }
@@ -1835,6 +1851,21 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     () => checkupGroupTiles.find((x) => x.id === checkupGroupEditId) ?? null,
     [checkupGroupTiles, checkupGroupEditId],
   )
+  const checkupCategoryOptions = useMemo(() => {
+    const options: string[] = []
+    const seen = new Set<string>()
+    const pushUnique = (value: string | null | undefined) => {
+      const label = displayCheckupCategory(value)
+      const key = normalizeCheckupCategory(label)
+      if (seen.has(key)) return
+      seen.add(key)
+      options.push(label)
+    }
+    for (const g of checkupGroupTiles) pushUnique(g.title)
+    for (const c of checkups) pushUnique(c.group_title)
+    if (!options.length) pushUnique('Общий')
+    return options
+  }, [checkupGroupTiles, checkups])
 
   useEffect(() => {
     if (!selectedCheckup) return
@@ -2534,7 +2565,16 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           </label>
           <input placeholder="Заголовок" value={checkupTitle} onChange={(e) => setCheckupTitle(e.target.value)} />
           <input placeholder="Подзаголовок (необязательно)" value={checkupSubtitle} onChange={(e) => setCheckupSubtitle(e.target.value)} />
-          <input placeholder="Плитка/группа (например: Общий, Мужской, Женский)" value={checkupGroupTitle} onChange={(e) => setCheckupGroupTitle(e.target.value)} />
+          <label>
+            Категория (флаг для плитки)
+            <select value={checkupGroupTitle} onChange={(e) => setCheckupGroupTitle(e.target.value)}>
+              {checkupCategoryOptions.map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </label>
           <input placeholder="Цена / подпись справа" value={checkupPrice} onChange={(e) => setCheckupPrice(e.target.value)} />
           <input placeholder="URL картинки карточки на общем экране" value={checkupListImage} onChange={(e) => setCheckupListImage(e.target.value)} />
           <input
@@ -2603,7 +2643,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               const payload = {
                 title: checkupTitle,
                 subtitle: checkupSubtitle || null,
-                group_title: checkupGroupTitle.trim() || 'Общий',
+                group_title: displayCheckupCategory(checkupGroupTitle),
                 price_label: checkupPrice || null,
                 list_image_url: checkupListImage || null,
                 image_url: checkupImage || null,
@@ -2630,7 +2670,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               setCheckupEditId('')
               setCheckupTitle('')
               setCheckupSubtitle('')
-              setCheckupGroupTitle('Общий')
+              setCheckupGroupTitle(checkupCategoryOptions[0] ?? 'Общий')
               setCheckupPrice('')
               setCheckupListImage('')
               setCheckupImage('')
@@ -2647,7 +2687,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               setCheckupSort(0)
               await reload()
             }}
-            disabled={!checkupTitle.trim()}
+            disabled={!checkupTitle.trim() || !checkupGroupTitle.trim()}
           >
             {checkupEditId ? 'Сохранить изменения' : 'Добавить программу'}
           </button>
