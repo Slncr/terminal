@@ -1551,6 +1551,11 @@ main {
   display: grid;
   grid-template-columns: 1fr 714px;
   min-height: 341px;
+  background: #f5f6fa;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-left: calc(50vw - min(865px, calc((100vw - 30px) / 2)));
+  padding-right: calc(50vw - min(865px, calc((100vw - 30px) / 2)));
 }
 
 .checkup-details-texts {
@@ -1576,6 +1581,8 @@ main {
   min-width: 714px;
   height: 341px;
   min-height: 341px;
+  justify-self: end;
+  margin-right: calc(50% - 50vw);
   border-left: 0;
   background: #f5f6fa;
   overflow: hidden;

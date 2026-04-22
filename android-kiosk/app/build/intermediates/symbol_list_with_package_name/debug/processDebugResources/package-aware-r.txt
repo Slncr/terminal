@@ -3161,6 +3161,7 @@ id end
 id endToStart
 id enterAlways
 id enterAlwaysCollapsed
+id errorText
 id escape
 id exitUntilCollapsed
 id expand_activities_button

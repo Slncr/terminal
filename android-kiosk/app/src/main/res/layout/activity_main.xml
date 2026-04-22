@@ -15,4 +15,15 @@
         android:layout_height="48dp"
         android:layout_gravity="center" />
 
+    <TextView
+        android:id="@+id/errorText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:padding="24dp"
+        android:textAlignment="center"
+        android:textColor="#1F2D3F"
+        android:textSize="18sp"
+        android:visibility="gone" />
+
 </FrameLayout>
