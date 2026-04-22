@@ -1019,18 +1019,20 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
           )}
         </div>
         <div className="checkup-details-extra">
-          <div className="checkup-details-extra-title">В чекап входят:</div>
-          <div className="checkup-details-bullets">
-            <ul className="checkup-bullet-list">
-              {(leftBullets.length ? leftBullets : defaultLeftBullets).map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-            <ul className="checkup-bullet-list">
-              {(rightBullets.length ? rightBullets : defaultRightBullets).map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
+          <div className="checkup-details-bullets-box">
+            <div className="checkup-details-extra-title">В чекап входят:</div>
+            <div className="checkup-details-bullets">
+              <ul className="checkup-bullet-list">
+                {(leftBullets.length ? leftBullets : defaultLeftBullets).map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
+              </ul>
+              <ul className="checkup-bullet-list">
+                {(rightBullets.length ? rightBullets : defaultRightBullets).map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
+              </ul>
+            </div>
           </div>
           <div className="checkup-details-footer-text">{footerText}</div>
           <div className="checkup-details-bottom-row">

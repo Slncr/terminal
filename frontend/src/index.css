@@ -1592,7 +1592,7 @@ main {
   justify-self: end;
   margin-right: 0;
   border-left: 0;
-  background: #f5f6fa;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -1604,11 +1604,17 @@ main {
 }
 
 .checkup-details-extra {
-  border: 1px solid #dce5f3;
+  border: 0;
   padding: 0.95rem 1.2rem 1.1rem;
+  background: transparent;
+  margin-top: 0.7rem;
+}
+
+.checkup-details-bullets-box {
+  border: 1px solid #dce5f3;
   background: #f5f6fa;
   border-radius: 18px;
-  margin-top: 0.7rem;
+  padding: 0.6rem 0.8rem 0.8rem;
 }
 
 .checkup-details-extra-title {
