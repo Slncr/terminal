@@ -155,6 +155,11 @@ class CheckupItemIn(BaseModel):
     image_y: int = 0
     image_scale: int = 100
     description: str | None = None
+    included_left: str | None = None
+    included_right: str | None = None
+    post_info_text: str | None = None
+    cta_text: str | None = None
+    registry_note: str | None = None
     sort_order: int = 0
     is_active: bool = True
 

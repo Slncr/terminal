@@ -29,6 +29,12 @@ body {
   background: #ffffff;
 }
 
+h1 {
+  font-family: 'Gotham Pro', 'GothamPro', 'Manrope', system-ui, sans-serif !important;
+  font-weight: 300 !important;
+  font-style: normal;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -557,10 +563,8 @@ main {
 .doctor-search-icon {
   position: absolute;
   left: 0.7rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
+  top: 30%;
+  transform: scale(0.8);  
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1207,7 +1211,8 @@ main {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
+  column-gap: 0;
+  row-gap: 6px;
 }
 
 .promo-card {
@@ -1226,15 +1231,17 @@ main {
 
 .promo-card-image-wrap {
   width: 100%;
-  height: 220px;
-  margin-bottom: 0.7rem;
-  border-radius: 12px;
+  height: 198px;
+  margin-bottom: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .promo-card-image {
-  width: 100%;
+  width: 90%;
   height: 100%;
+  margin: 0 auto;
+  display: block;
   object-fit: cover;
   object-position: center;
   transform-origin: center center;
@@ -1257,25 +1264,43 @@ main {
 }
 
 .promo-details {
-  width: min(1180px, 100%);
+  width: min(1730px, calc(100vw - 30px));
   margin: 0 auto;
-  background: #ffffff;
-  border: 1px solid #dce3ed;
-  border-radius: 18px;
-  padding: 1rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.promo-details-page {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
 }
 
 .promo-details-title {
-  margin: 0 0 1rem;
-  font-size: 1.8rem;
-  color: #202938;
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  color: #6f7787;
+  font-weight: 500;
 }
 
 .promo-details-body {
   display: grid;
-  grid-template-columns: 460px 1fr;
-  gap: 1.2rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
   align-items: start;
+}
+
+.promo-details-right {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e3e8f0;
 }
 
 .promo-details-image-wrap {
@@ -1290,35 +1315,43 @@ main {
 
 .promo-details-image-wrap-small {
   width: 100%;
-  height: 300px;
+  height: 340px;
   margin: 0;
+  border-radius: 16px;
+  background: transparent;
+  border: 0;
 }
 
 .promo-details-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
 .promo-details-text {
   color: #3f495b;
-  font-size: 1.15rem;
-  line-height: 1.45;
+  font-size: 1.02rem;
+  line-height: 1.4;
   white-space: pre-wrap;
 }
 
 .promo-info-note {
-  width: min(1820px, 100%);
-  margin: 0.75rem auto 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: auto 15px 0 auto;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 0.55rem;
   color: #167dcb;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 400;
   text-align: right;
+  border: 1px solid #dfe5ee;
+  border-radius: 10px;
+  padding: 0.35rem 0.65rem;
+  background: #ffffff;
 }
 
 .checkup-group-title {
@@ -1336,7 +1369,7 @@ main {
 }
 
 .checkup-groups-grid {
-  width: min(1824px, 100%);
+  width: min(1174px, calc(100vw - 30px));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1346,11 +1379,13 @@ main {
 .checkup-groups-row {
   display: flex;
   gap: 14px;
-  justify-content: center;
+  justify-content: flex-start;
+  width: min(1174px, calc(100vw - 30px));
+  margin: 0 auto;
 }
 
 .checkup-groups-row-bottom {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .checkup-group-card {
@@ -1374,8 +1409,9 @@ main {
 }
 
 .checkup-group-card--bottom {
-  width: 905px;
-  min-width: 905px;
+  width: 580px;
+  min-width: 580px;
+  max-width: 580px;
   height: 284px;
   min-height: 284px;
 }
@@ -1406,7 +1442,7 @@ main {
 
 .checkup-group-card-subtitle {
   color: #4e5b71;
-  font-size: 0.68rem;
+  font-size: 0.59rem;
   margin-top: 0.45rem;
   position: relative;
   z-index: 1;
@@ -1452,7 +1488,7 @@ main {
 }
 
 .checkup-grid-cards {
-  width: min(1802px, 100%);
+  width: min(1730px, calc(100vw - 30px));
   margin: 0 auto;
   border: 0;
   border-radius: 0;
@@ -1470,15 +1506,15 @@ main {
   text-align: left;
   overflow: hidden;
   padding: 0;
-  width: 431px;
-  min-width: 431px;
-  height: 304px;
-  min-height: 304px;
+  width: 410px;
+  min-width: 410px;
+  height: 292px;
+  min-height: 292px;
 }
 
 .checkup-list-card-image-wrap {
-  width: 431px;
-  height: 212px;
+  width: 410px;
+  height: 202px;
   background: #ffffff;
 }
 
@@ -1505,9 +1541,9 @@ main {
 }
 
 .checkup-details {
-  width: min(1820px, 100%);
+  width: min(1730px, calc(100vw - 30px));
   margin: 0 auto;
-  border: 2px solid #31a8f0;
+  border: 0;
   background: #ffffff;
 }
 
@@ -1540,8 +1576,8 @@ main {
   min-width: 714px;
   height: 341px;
   min-height: 341px;
-  border-left: 1px solid #deebf7;
-  background: #ffffff;
+  border-left: 0;
+  background: #f5f6fa;
   overflow: hidden;
 }
 
@@ -1550,6 +1586,92 @@ main {
   height: 100%;
   object-fit: cover;
   transform-origin: center center;
+}
+
+.checkup-details-extra {
+  border-top: 0;
+  padding: 0.95rem 1.2rem 1.1rem;
+  background: #ffffff;
+}
+
+.checkup-details-extra-title {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.7rem;
+  color: #1f2d3f;
+}
+
+.checkup-details-bullets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.25rem;
+}
+
+.checkup-bullet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.checkup-bullet-list li {
+  position: relative;
+  padding-left: 0.9rem;
+  color: #2f394b;
+  font-size: 0.95rem;
+  line-height: 1.32;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.checkup-bullet-list li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0094f5;
+  position: absolute;
+  left: 0;
+  top: 0.45rem;
+}
+
+.checkup-details-footer-text {
+  margin-top: 2.8rem;
+  max-width: 50%;
+  color: #2f394b;
+  font-size: 0.95rem;
+  line-height: 1.33;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.checkup-details-bottom-row {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.checkup-details-note-strong {
+  color: #1f2d3f;
+  font-size: 0.98rem;
+  line-height: 1.32;
+  font-weight: 600;
+}
+
+.checkup-details-note-info {
+  color: #2a6ea4;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .checkup-preview-full {

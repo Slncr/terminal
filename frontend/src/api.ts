@@ -172,6 +172,11 @@ export type AdminCheckupItem = {
   image_y?: number
   image_scale?: number
   description: string | null
+  included_left?: string | null
+  included_right?: string | null
+  post_info_text?: string | null
+  cta_text?: string | null
+  registry_note?: string | null
   sort_order: number
   is_active: boolean
 }

@@ -205,6 +205,11 @@ def update_checkup(checkup_id: str, payload: CheckupItemIn, db: Session = Depend
     row.image_y = payload.image_y
     row.image_scale = payload.image_scale
     row.description = payload.description
+    row.included_left = payload.included_left
+    row.included_right = payload.included_right
+    row.post_info_text = payload.post_info_text
+    row.cta_text = payload.cta_text
+    row.registry_note = payload.registry_note
     row.sort_order = payload.sort_order
     row.is_active = payload.is_active
     db.commit()

@@ -121,6 +121,12 @@ function dateKeyLocal(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+function startOfDay(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
 export default function App() {
   const isAdminMode = window.location.pathname.startsWith('/admin')
   const lastSyncSeenRef = useRef<string | null>(null)
@@ -719,7 +725,6 @@ function PromoGrid({
         <div className="promo-grid">
           {banners.map((b) => (
             <button key={b.id} type="button" className="promo-card" onClick={() => onPick(b)}>
-              <div className="promo-card-title">{b.title}</div>
               <div className="promo-card-image-wrap">
                 <img
                   src={b.list_image_url || b.image_url}
@@ -749,16 +754,20 @@ function PromoDetails({ banner, onBack }: { banner: AdminBanner; onBack: () => v
         </button>
         <h2>Акции</h2>
       </div>
-      <section className="promo-details">
-        <h3 className="promo-details-title">{banner.title}</h3>
-        <div className="promo-details-body">
-          <div className="promo-details-image-wrap promo-details-image-wrap-small">
-            <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
+      <div className="promo-details-page">
+        <section className="promo-details">
+          <h3 className="promo-details-title">{banner.title}</h3>
+          <div className="promo-details-body">
+            <div className="promo-details-image-wrap promo-details-image-wrap-small">
+              <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
+            </div>
+            <div className="promo-details-right">
+              <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
+            </div>
           </div>
-          <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
-        </div>
-      </section>
-      <PromoInfoNote />
+        </section>
+        <PromoInfoNote />
+      </div>
     </>
   )
 }
@@ -768,6 +777,8 @@ function PromoInfoNote() {
     <div className="promo-info-note">
       <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden>
         <circle cx="13" cy="13" r="12.1" stroke="#0094F5" strokeWidth="1.8" />
+        <line x1="13" y1="6" x2="13" y2="16" stroke="#0094F5" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="13" cy="20" r="1" fill="#0094F5" />
       </svg>
       <span>Все акции и предложения проводится в Евродон Социалистическая</span>
     </div>
@@ -938,6 +949,30 @@ function CheckupGrid({
 }
 
 function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () => void }) {
+  const defaultLeftBullets = [
+    'Общий анализ крови (ОАК) - помогает определить уровень гемоглобина, воспалительные показатели и общее состояние организма.',
+    'Общий анализ мочи (ОАМ) - оценивает работу почек и водно-солевой баланс, что особенно важно при интенсивных тренировках.',
+    'Глюкоза (венозная) - контроль уровня сахара в крови для оценки энергетического обмена и устойчивости к физическим нагрузкам.',
+    'Мочевина и креатинин - показатели эффективности работы почек и белкового обмена.',
+  ]
+  const defaultRightBullets = [
+    'Холестерин - оценка липидного обмена и состояния сосудов, особенно при активных нагрузках.',
+    'Билирубин общий - помогает выявить нарушения функции печени, которая активно участвует в обмене веществ.',
+    'Мочевая кислота - показывает состояние белкового обмена и риск воспалительных процессов в суставах.',
+    'АСТ (аспартатаминотрансфераза) - отражает состояние печени и мышечной ткани.',
+  ]
+  const leftBullets = (item.included_left ?? '')
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  const rightBullets = (item.included_right ?? '')
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  const footerText = item.post_info_text?.trim() || 'По итогам обследования врач даст рекомендации по питанию, режиму тренировок и восстановлению, чтобы спорт приносил только пользу.'
+  const ctaText = item.cta_text?.trim() || `Запишитесь на чекап «${item.title}» в клинике Евродон – контролируйте здоровье и тренируйтесь с уверенностью!`
+  const registryNote = item.registry_note?.trim() || 'Записаться можно на регистратуре'
+
   return (
     <>
       <div className="doctors-page-head">
@@ -966,6 +1001,26 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
               />
             </div>
           )}
+        </div>
+        <div className="checkup-details-extra">
+          <div className="checkup-details-extra-title">В чекап входят:</div>
+          <div className="checkup-details-bullets">
+            <ul className="checkup-bullet-list">
+              {(leftBullets.length ? leftBullets : defaultLeftBullets).map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+            <ul className="checkup-bullet-list">
+              {(rightBullets.length ? rightBullets : defaultRightBullets).map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="checkup-details-footer-text">{footerText}</div>
+          <div className="checkup-details-bottom-row">
+            <div className="checkup-details-note-strong">{ctaText}</div>
+            <div className="checkup-details-note-info">{registryNote}</div>
+          </div>
         </div>
       </section>
     </>
@@ -1153,6 +1208,7 @@ function DoctorSchedule({
   const [monthCursor, setMonthCursor] = useState(() => new Date(day.getFullYear(), day.getMonth(), 1))
   const [monthLoading, setMonthLoading] = useState(false)
   const [monthAvailability, setMonthAvailability] = useState<Record<string, boolean>>({})
+  const todayStart = useMemo(() => startOfDay(new Date()), [])
 
   useEffect(() => {
     let cancelled = false
@@ -1191,6 +1247,7 @@ function DoctorSchedule({
     setDay((d) => {
       const n = new Date(d)
       n.setDate(n.getDate() + delta)
+      if (startOfDay(n) < todayStart) return new Date(todayStart)
       return n
     })
   }
@@ -1239,7 +1296,7 @@ function DoctorSchedule({
       days.map(async (d) => {
         try {
           const rows = await fetchFreeSlots(doctor.mis_id, d)
-          const hasFree = rows.length > 0
+          const hasFree = startOfDay(d) >= todayStart && rows.length > 0
           return [dateKeyLocal(d), hasFree] as const
         } catch {
           return [dateKeyLocal(d), false] as const
@@ -1258,7 +1315,7 @@ function DoctorSchedule({
     return () => {
       cancelled = true
     }
-  }, [doctor.mis_id, monthCursor, monthOpen, period])
+  }, [doctor.mis_id, monthCursor, monthOpen, period, todayStart])
 
   return (
     <>
@@ -1331,15 +1388,21 @@ function DoctorSchedule({
             <>
               <div className="doctor-week-days">
                 {weekDays.map((d) => (
+                  (() => {
+                    const isPastDay = startOfDay(d) < todayStart
+                    return (
                   <button
                     key={dateKeyLocal(d)}
                     type="button"
                     className={`doctor-week-day ${dateKeyLocal(d) === dateKeyLocal(day) ? 'active' : ''}`}
+                    disabled={isPastDay}
                     onClick={() => setDay(new Date(d))}
                   >
                     <span>{d.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>
                     <strong>{d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</strong>
                   </button>
+                    )
+                  })()
                 ))}
               </div>
               <div className="doctor-slots-strip">
@@ -1348,16 +1411,22 @@ function DoctorSchedule({
                 </button>
                 <div className="doctor-slots-inline">
                   {slots.map((s) => (
+                    (() => {
+                      const isPastSlot = new Date(s.start).getTime() < Date.now()
+                      const disabled = s.status === 'busy' || isPastSlot
+                      return (
                     <button
                       key={`${s.start}-${s.status}`}
                       type="button"
                       className={`doctor-slot-pill ${selectedSlot?.start === s.start ? 'selected' : ''}`}
-                      disabled={s.status === 'busy'}
-                      onClick={() => setSelectedSlot(s)}
+                      disabled={disabled}
+                      onClick={() => !disabled && setSelectedSlot(s)}
                       title={s.status === 'busy' ? s.service_name ?? 'Занято' : 'Свободно'}
                     >
                       {new Date(s.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                     </button>
+                      )
+                    })()
                   ))}
                 </div>
                 <button type="button" className="doctor-strip-arrow" onClick={() => shiftDay(1)}>
@@ -1386,14 +1455,17 @@ function DoctorSchedule({
               <div className="doctor-calendar-grid">
                 {calendarCells.map((cell) => {
                   const key = dateKeyLocal(cell.date)
-                  const available = !!monthAvailability[key]
+                  const isPastDay = startOfDay(cell.date) < todayStart
+                  const available = !isPastDay && !!monthAvailability[key]
                   const selected = dateKeyLocal(cell.date) === dateKeyLocal(day)
                   return (
                     <button
                       key={key}
                       type="button"
                       className={`doctor-calendar-day ${cell.inMonth ? '' : 'muted'} ${available ? 'has-slots' : ''} ${selected ? 'selected' : ''}`}
+                      disabled={isPastDay}
                       onClick={() => {
+                        if (isPastDay) return
                         setDay(new Date(cell.date))
                         setPeriod('week')
                         setMonthOpen(false)
@@ -1473,6 +1545,25 @@ function BookingModal({
   const selectedService = services.find((s) => s.mis_id === serviceId)
   const clinicLabel = slot.clinic_mis_id ? 'Евродон Социалистическая' : 'Евродон'
 
+  const formatBirthdayInput = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    if (digits.length <= 2) return digits
+    if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`
+    return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`
+  }
+
+  const parseBirthday = (value: string): string | null => {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value.trim())
+    if (!m) return null
+    const dd = Number(m[1])
+    const mm = Number(m[2])
+    const yyyy = Number(m[3])
+    const d = new Date(yyyy, mm - 1, dd)
+    if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null
+    if (startOfDay(d) > startOfDay(new Date())) return null
+    return `${String(yyyy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+  }
+
   useEffect(() => {
     if (!ok) return
     const timer = window.setTimeout(() => {
@@ -1486,6 +1577,12 @@ function BookingModal({
     setBusy(true)
     setMsg(null)
     setOk(false)
+    const normalizedBirthday = parseBirthday(birthday)
+    if (!normalizedBirthday) {
+      setBusy(false)
+      setMsg('Введите дату рождения в формате ДД.ММ.ГГГГ')
+      return
+    }
     try {
       const appt = await createAppointment({
         employee_mis_id: doctor.mis_id,
@@ -1496,7 +1593,7 @@ function BookingModal({
         patient_surname: surname,
         patient_name: name,
         patient_patronymic: patronymic || undefined,
-        birthday,
+        birthday: normalizedBirthday,
         phone: phone.replace(/\D/g, ''),
       })
       let current = appt
@@ -1565,7 +1662,12 @@ function BookingModal({
               <input value={surname} onChange={(e) => setSurname(e.target.value)} autoComplete="family-name" placeholder="Фамилия" />
               <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" placeholder="Имя" />
               <input value={patronymic} onChange={(e) => setPatronymic(e.target.value)} placeholder="Отчество" />
-              <input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+              <input
+                inputMode="numeric"
+                placeholder="Дата рождения (ДД.ММ.ГГГГ)"
+                value={birthday}
+                onChange={(e) => setBirthday(formatBirthdayInput(e.target.value))}
+              />
               <input
                 inputMode="tel"
                 placeholder="Телефон"
@@ -1589,7 +1691,7 @@ function BookingModal({
               <button
                 type="button"
                 className="doctor-book-btn"
-                disabled={busy || !surname.trim() || !name.trim() || !birthday || phone.replace(/\D/g, '').length < 10}
+                disabled={busy || !surname.trim() || !name.trim() || !parseBirthday(birthday) || phone.replace(/\D/g, '').length < 10}
                 onClick={() => void submit()}
               >
                 {busy ? 'Отправка…' : 'Записаться на прием'}
@@ -1657,6 +1759,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [checkupImageY, setCheckupImageY] = useState(0)
   const [checkupImageScale, setCheckupImageScale] = useState(100)
   const [checkupDescription, setCheckupDescription] = useState('')
+  const [checkupIncludedLeft, setCheckupIncludedLeft] = useState('')
+  const [checkupIncludedRight, setCheckupIncludedRight] = useState('')
+  const [checkupPostInfoText, setCheckupPostInfoText] = useState('')
+  const [checkupCtaText, setCheckupCtaText] = useState('')
+  const [checkupRegistryNote, setCheckupRegistryNote] = useState('')
   const [checkupSort, setCheckupSort] = useState(0)
   const [checkupEditId, setCheckupEditId] = useState('')
   const [checkupGroupEditId, setCheckupGroupEditId] = useState('')
@@ -1742,6 +1849,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setCheckupImageY(Number(selectedCheckup.image_y ?? 0))
     setCheckupImageScale(Number(selectedCheckup.image_scale ?? 100))
     setCheckupDescription(selectedCheckup.description ?? '')
+    setCheckupIncludedLeft(selectedCheckup.included_left ?? '')
+    setCheckupIncludedRight(selectedCheckup.included_right ?? '')
+    setCheckupPostInfoText(selectedCheckup.post_info_text ?? '')
+    setCheckupCtaText(selectedCheckup.cta_text ?? '')
+    setCheckupRegistryNote(selectedCheckup.registry_note ?? '')
     setCheckupSort(Number(selectedCheckup.sort_order ?? 0))
   }, [selectedCheckup?.id])
   useEffect(() => {
@@ -2460,6 +2572,31 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             onChange={(e) => setCheckupSort(Number(e.target.value) || 0)}
           />
           <textarea placeholder="Описание программы" value={checkupDescription} onChange={(e) => setCheckupDescription(e.target.value)} />
+          <textarea
+            placeholder="Левый список (каждый пункт с новой строки)"
+            value={checkupIncludedLeft}
+            onChange={(e) => setCheckupIncludedLeft(e.target.value)}
+          />
+          <textarea
+            placeholder="Правый список (каждый пункт с новой строки)"
+            value={checkupIncludedRight}
+            onChange={(e) => setCheckupIncludedRight(e.target.value)}
+          />
+          <textarea
+            placeholder="Абзац под списками"
+            value={checkupPostInfoText}
+            onChange={(e) => setCheckupPostInfoText(e.target.value)}
+          />
+          <textarea
+            placeholder="Жирная подпись внизу"
+            value={checkupCtaText}
+            onChange={(e) => setCheckupCtaText(e.target.value)}
+          />
+          <input
+            placeholder="Правое информационное сообщение"
+            value={checkupRegistryNote}
+            onChange={(e) => setCheckupRegistryNote(e.target.value)}
+          />
           <button
             className="btn-primary"
             onClick={async () => {
@@ -2475,6 +2612,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 image_y: checkupImageY,
                 image_scale: checkupImageScale,
                 description: checkupDescription || null,
+                included_left: checkupIncludedLeft || null,
+                included_right: checkupIncludedRight || null,
+                post_info_text: checkupPostInfoText || null,
+                cta_text: checkupCtaText || null,
+                registry_note: checkupRegistryNote || null,
                 sort_order: checkupSort,
                 is_active: true,
               }
@@ -2497,6 +2639,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               setCheckupImageY(0)
               setCheckupImageScale(100)
               setCheckupDescription('')
+              setCheckupIncludedLeft('')
+              setCheckupIncludedRight('')
+              setCheckupPostInfoText('')
+              setCheckupCtaText('')
+              setCheckupRegistryNote('')
               setCheckupSort(0)
               await reload()
             }}
