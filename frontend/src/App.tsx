@@ -210,7 +210,7 @@ export default function App() {
 
   useEffect(() => {
     void refreshMeta()
-    const id = window.setInterval(() => void refreshMeta(), 60_000)
+    const id = window.setInterval(() => void refreshMeta(), 240_000)
     return () => window.clearInterval(id)
   }, [refreshMeta])
 
