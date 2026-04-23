@@ -65,6 +65,7 @@ type TileImageMeta = {
 
 type MainView =
   | { kind: 'home' }
+  | { kind: 'consumer' }
   | { kind: 'doctors'; title: string; doctors: Employee[] }
   | { kind: 'doctor'; doctor: Employee }
   | { kind: 'promos' }
@@ -114,11 +115,37 @@ function formatDayRu(d: Date): string {
   })
 }
 
-function dateKeyLocal(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+function dateKeyMoscow(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const year = parts.find((p) => p.type === 'year')?.value ?? '1970'
+  const month = parts.find((p) => p.type === 'month')?.value ?? '01'
+  const day = parts.find((p) => p.type === 'day')?.value ?? '01'
+  return `${year}-${month}-${day}`
+}
+
+function formatTimeMoscow(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value)
+  return d.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Moscow',
+  })
+}
+
+function formatDayMoscow(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value)
+  return d.toLocaleDateString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/Moscow',
+  })
 }
 
 function startOfDay(d: Date): Date {
@@ -223,15 +250,18 @@ export default function App() {
         {!loading && view.kind === 'home' && (
           <HomeTiles
             doctors={doctors}
+            onOpenConsumer={() => setView({ kind: 'consumer' })}
             onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
             onOpenGroup={(title, doctorsInGroup) => setView({ kind: 'doctors', title, doctors: doctorsInGroup })}
             onOpenDoctor={(doctor) => setView({ kind: 'doctor', doctor })}
             onOpenPromos={() => setView({ kind: 'promos' })}
             onOpenCheckups={() => setView({ kind: 'checkups' })}
             tiles={tiles}
-            documents={documents}
             banners={banners}
           />
+        )}
+        {!loading && view.kind === 'consumer' && (
+          <ConsumerCornerScreen documents={documents} onBack={() => setView({ kind: 'home' })} />
         )}
         {!loading && view.kind === 'promos' && (
           <PromoGrid banners={banners} onBack={() => setView({ kind: 'home' })} onPick={(b) => setView({ kind: 'promo', banner: b })} />
@@ -291,26 +321,26 @@ export default function App() {
 
 function HomeTiles({
   doctors,
+  onOpenConsumer,
   onOpenDoctors,
   onOpenGroup,
   onOpenDoctor,
   onOpenPromos,
   onOpenCheckups,
   tiles,
-  documents,
   banners,
 }: {
   doctors: Employee[]
+  onOpenConsumer: () => void
   onOpenDoctors: () => void
   onOpenGroup: (title: string, doctorsInGroup: Employee[]) => void
   onOpenDoctor: (doctor: Employee) => void
   onOpenPromos: () => void
   onOpenCheckups: () => void
   tiles: AdminTile[]
-  documents: AdminDocument[]
   banners: AdminBanner[]
 }) {
-  const [consumerOpen, setConsumerOpen] = useState(false)
+  const consumerCornerEnabled = true
   const [promoIndex, setPromoIndex] = useState(0)
   const specialtyGroups = useMemo(() => {
     const unique = new Set<string>()
@@ -602,9 +632,11 @@ function HomeTiles({
 
   return (
     <section className="home-layout">
-      <button type="button" className="consumer-btn" onClick={() => setConsumerOpen(true)}>
-        Уголок потребителя
-      </button>
+      {consumerCornerEnabled && (
+        <button type="button" className="consumer-btn" onClick={onOpenConsumer}>
+          Уголок потребителя
+        </button>
+      )}
 
       <div className="home-head">
         <div className="logo-mark">
@@ -711,9 +743,6 @@ function HomeTiles({
         </div>
       </div>
 
-      {consumerOpen && (
-        <ConsumerCornerModal documents={documents} onClose={() => setConsumerOpen(false)} />
-      )}
     </section>
   )
 }
@@ -1147,57 +1176,65 @@ function DoctorGrid({
   )
 }
 
-function ConsumerCornerModal({ documents, onClose }: { documents: AdminDocument[]; onClose: () => void }) {
-  const [selectedDocUrl, setSelectedDocUrl] = useState<string>('')
-
-  useEffect(() => {
-    if (!documents.length) {
-      setSelectedDocUrl('')
-      return
-    }
-    if (!selectedDocUrl || !documents.some((d) => d.file_url === selectedDocUrl)) {
-      setSelectedDocUrl(documents[0].file_url)
-    }
-  }, [documents, selectedDocUrl])
-
+function ConsumerDocPreviewModal({ docUrl, onClose }: { docUrl: string; onClose: () => void }) {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-consumer">
-        <h3>Уголок потребителя</h3>
-        {documents.length === 0 ? (
-          <div className="empty-hint">Документы не загружены</div>
-        ) : (
-          <>
-          <div className="form-grid consumer-doc-list">
-            {documents.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                className={`doc-link ${selectedDocUrl === d.file_url ? 'active' : ''}`}
-                onClick={() => setSelectedDocUrl(d.file_url)}
-              >
-                {d.title}
-              </button>
-            ))}
-          </div>
-          {selectedDocUrl && (
-            <div className="consumer-doc-preview">
-              <iframe
-                title="Просмотр документа"
-                src={selectedDocUrl}
-                className="consumer-doc-frame"
-              />
-            </div>
-          )}
-          </>
-        )}
-        <div className="form-actions">
-          <button type="button" className="btn-primary" onClick={onClose}>
-            Закрыть
+        <div className="consumer-preview-head">
+          <button type="button" className="back-chip-btn" onClick={onClose}>
+            <span aria-hidden>←</span> Закрыть
           </button>
+        </div>
+        <div className="consumer-doc-preview">
+          <iframe title="Просмотр документа" src={docUrl} className="consumer-doc-frame" />
         </div>
       </div>
     </div>
+  )
+}
+
+function ConsumerCornerScreen({ documents, onBack }: { documents: AdminDocument[]; onBack: () => void }) {
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string>('')
+
+  return (
+    <>
+      <div className="doctors-page-head consumer-screen-head">
+        <button type="button" className="back-chip-btn" onClick={onBack}>
+          <span aria-hidden>←</span> Назад
+        </button>
+        <h2>Уголок потребителя</h2>
+      </div>
+      {documents.length === 0 ? (
+        <div className="empty-hint">Документы не загружены</div>
+      ) : (
+        <div className="consumer-screen-grid">
+          {documents.map((d) => (
+            <button key={d.id} type="button" className="consumer-doc-card" onClick={() => setSelectedDocUrl(d.file_url)}>
+              <span className="consumer-doc-icon" aria-hidden>
+                <svg width="21" height="26" viewBox="0 0 21 26" fill="none">
+                  <g clipPath="url(#clip0_consumer_doc)">
+                    <path
+                      d="M6.29977 7.92353H12.5998M6.29977 12.9635H11.3398M6.29977 18.0035H7.55976M3.77977 1.62354H16.3798C17.7716 1.62354 18.8998 2.75178 18.8998 4.14353V16.7435C18.8998 20.9188 15.515 24.3035 11.3398 24.3035H3.77977C2.38801 24.3035 1.25977 23.1753 1.25977 21.7835V4.14353C1.25977 2.75178 2.38801 1.62354 3.77977 1.62354Z"
+                      stroke="#0094F5"
+                      strokeWidth="1.89"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                  <defs>
+                    <clipPath id="clip0_consumer_doc">
+                      <rect width="20.16" height="25.92" fill="white" />
+                    </clipPath>
+                  </defs>
+                </svg>
+              </span>
+              <span className="consumer-doc-title">{d.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {selectedDocUrl && <ConsumerDocPreviewModal docUrl={selectedDocUrl} onClose={() => setSelectedDocUrl('')} />}
+    </>
   )
 }
 
@@ -1318,9 +1355,9 @@ function DoctorSchedule({
         try {
           const rows = await fetchFreeSlots(doctor.mis_id, d)
           const hasFree = startOfDay(d) >= todayStart && rows.length > 0
-          return [dateKeyLocal(d), hasFree] as const
+          return [dateKeyMoscow(d), hasFree] as const
         } catch {
-          return [dateKeyLocal(d), false] as const
+          return [dateKeyMoscow(d), false] as const
         }
       }),
     )
@@ -1349,8 +1386,6 @@ function DoctorSchedule({
 
       <section className="doctor-booking-card">
         <div className="doctor-booking-photo-wrap">
-          <div className="doctor-booking-photo-shape doctor-booking-photo-shape-a" />
-          <div className="doctor-booking-photo-shape doctor-booking-photo-shape-b" />
           {doctorPhoto ? (
             <img src={doctorPhoto} alt={doctor.full_name} className="doctor-booking-photo" />
           ) : (
@@ -1413,9 +1448,9 @@ function DoctorSchedule({
                     const isPastDay = startOfDay(d) < todayStart
                     return (
                   <button
-                    key={dateKeyLocal(d)}
+                    key={dateKeyMoscow(d)}
                     type="button"
-                    className={`doctor-week-day ${dateKeyLocal(d) === dateKeyLocal(day) ? 'active' : ''}`}
+                    className={`doctor-week-day ${dateKeyMoscow(d) === dateKeyMoscow(day) ? 'active' : ''}`}
                     disabled={isPastDay}
                     onClick={() => setDay(new Date(d))}
                   >
@@ -1444,7 +1479,7 @@ function DoctorSchedule({
                       onClick={() => !disabled && setSelectedSlot(s)}
                       title={s.status === 'busy' ? s.service_name ?? 'Занято' : 'Свободно'}
                     >
-                      {new Date(s.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      {formatTimeMoscow(s.start)}
                     </button>
                       )
                     })()
@@ -1475,10 +1510,10 @@ function DoctorSchedule({
               </div>
               <div className="doctor-calendar-grid">
                 {calendarCells.map((cell) => {
-                  const key = dateKeyLocal(cell.date)
+                  const key = dateKeyMoscow(cell.date)
                   const isPastDay = startOfDay(cell.date) < todayStart
                   const available = !isPastDay && !!monthAvailability[key]
-                  const selected = dateKeyLocal(cell.date) === dateKeyLocal(day)
+                  const selected = dateKeyMoscow(cell.date) === dateKeyMoscow(day)
                   return (
                     <button
                       key={key}
@@ -1652,7 +1687,7 @@ function BookingModal({
         <div className="booking-screen-grid">
           <section className="booking-side-card">
             <div className="booking-side-label">Дата и время</div>
-            <div className="booking-side-value">{formatDayRu(new Date(slot.start))}, {new Date(slot.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+            <div className="booking-side-value">{formatDayMoscow(slot.start)}, {formatTimeMoscow(slot.start)}</div>
 
             <div className="booking-doctor-row">
               <div className="booking-doctor-avatar">

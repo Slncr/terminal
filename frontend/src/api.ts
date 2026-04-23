@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+const MIS_TIMEZONE_OFFSET = '+03:00'
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -6,6 +7,14 @@ async function parseJson<T>(res: Response): Promise<T> {
     throw new Error(text || res.statusText)
   }
   return res.json() as Promise<T>
+}
+
+function toMisDayQuery(day: Date): string {
+  const y = day.getFullYear()
+  const m = String(day.getMonth() + 1).padStart(2, '0')
+  const d = String(day.getDate()).padStart(2, '0')
+  // Send day in clinic timezone to avoid device-local timezone shifts.
+  return `${y}-${m}-${d}T12:00:00${MIS_TIMEZONE_OFFSET}`
 }
 
 export type Employee = {
@@ -67,13 +76,13 @@ export async function fetchDoctorServices(employeeId: string): Promise<Service[]
 }
 
 export async function fetchFreeSlots(employeeId: string, day: Date): Promise<FreeSlot[]> {
-  const q = new URLSearchParams({ day: day.toISOString() })
+  const q = new URLSearchParams({ day: toMisDayQuery(day) })
   const res = await fetch(`${API_BASE}/slots/${encodeURIComponent(employeeId)}/free?${q}`)
   return parseJson(res)
 }
 
 export async function fetchDaySlots(employeeId: string, day: Date): Promise<DaySlot[]> {
-  const q = new URLSearchParams({ day: day.toISOString() })
+  const q = new URLSearchParams({ day: toMisDayQuery(day) })
   const res = await fetch(`${API_BASE}/slots/${encodeURIComponent(employeeId)}/day?${q}`)
   return parseJson(res)
 }
