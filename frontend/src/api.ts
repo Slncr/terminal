@@ -170,6 +170,7 @@ export type AdminDoctorMedia = {
   badge1_label?: string | null
   badge2_label?: string | null
   badge3_label?: string | null
+  show_in_sections?: boolean
 }
 
 export type AdminCheckupItem = {
@@ -302,6 +303,7 @@ export async function upsertAdminDoctorMedia(body: {
   badge1_label?: string | null
   badge2_label?: string | null
   badge3_label?: string | null
+  show_in_sections?: boolean
 }): Promise<AdminDoctorMedia> {
   const res = await fetch(`${API_BASE}/admin/doctor-media`, {
     method: 'POST',

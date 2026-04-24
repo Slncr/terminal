@@ -63,6 +63,13 @@ def _range() -> tuple[datetime, datetime]:
     return start, end
 
 
+def _prune_expired_slots(db: Session, keep_days: int = 1) -> None:
+    cutoff = _utcnow() - timedelta(days=max(0, keep_days))
+    db.execute(delete(ScheduleSlot).where(ScheduleSlot.slot_end < cutoff))
+    db.execute(delete(OccupiedSlot).where(OccupiedSlot.slot_end < cutoff))
+    db.commit()
+
+
 def _split_interval(start: datetime, end: datetime, step_minutes: int) -> list[tuple[datetime, datetime]]:
     if end <= start:
         return []
@@ -826,6 +833,7 @@ async def run_full_sync(db: Session) -> SyncRun:
     start, end = _range()
     client = MisClient()
     try:
+        _prune_expired_slots(db, keep_days=1)
         raw_enl = await client.get_enlargement_schedule(start, end)
         enl_rows = find_schedule_items(raw_enl)
         if not enl_rows:
@@ -876,6 +884,7 @@ async def run_slots_sync(db: Session) -> SyncRun:
     start, end = _range()
     client = MisClient()
     try:
+        _prune_expired_slots(db, keep_days=1)
         # Lightweight refresh: update only availability tables.
         _purge_range(db, start, end)
         inserted = await _sync_schedule_enlargement(db, client, start, end)

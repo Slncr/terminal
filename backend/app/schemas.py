@@ -139,6 +139,7 @@ class DoctorMediaIn(BaseModel):
     badge1_label: str | None = None
     badge2_label: str | None = None
     badge3_label: str | None = None
+    show_in_sections: bool = True
 
 
 class DoctorMediaOut(DoctorMediaIn):

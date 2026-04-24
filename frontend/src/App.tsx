@@ -44,11 +44,6 @@ import {
   type SyncStatus,
 } from './api'
 
-type DoctorGroup = {
-  title: string
-  specialties: string[]
-}
-
 type FixedTilePreset = {
   key: string
   title: string
@@ -77,14 +72,7 @@ type MainView =
   | { kind: 'checkup-group'; groupTitle: string }
   | { kind: 'checkup'; item: AdminCheckupItem }
 
-const DIAGNOSTIC_GROUPS: DoctorGroup[] = [
-  { title: 'МРТ', specialties: ['мрт', 'магнитно-резонанс'] },
-  { title: 'КТ', specialties: ['кт', 'компьютерн'] },
-  { title: 'Рентген', specialties: ['рентген'] },
-  { title: 'УЗИ', specialties: ['узи', 'ультразвук'] },
-  { title: 'Эндоскопия', specialties: ['эндоскоп'] },
-  { title: 'Функциональная диагностика', specialties: ['экг', 'ээг', 'мрт', 'магнитно-резонанс', 'кт', 'компьютерн', 'рентген'] },
-]
+const FUNCTIONAL_COMMON_FILTERS = 'экг,ээг,экг социалистическая,мрт,магнитно-резонанс,кт,компьютерн,рентген'
 
 const FIXED_TILE_PRESETS: FixedTilePreset[] = [
   { key: 'main-specialists', title: 'Услуги специалистов', tile_type: 'main', size: 'large', sort_order: -1000, specialty_filters: null },
@@ -94,7 +82,7 @@ const FIXED_TILE_PRESETS: FixedTilePreset[] = [
     tile_type: 'main',
     size: 'large',
     sort_order: -999,
-    specialty_filters: DIAGNOSTIC_GROUPS.flatMap((g) => g.specialties).join(','),
+    specialty_filters: FUNCTIONAL_COMMON_FILTERS,
   },
   { key: 'side-actions', title: 'Акции', tile_type: 'side', size: 'side', sort_order: -1000, specialty_filters: null },
   { key: 'side-cosmo', title: 'Косметология', tile_type: 'side', size: 'side', sort_order: -999, specialty_filters: 'косметолог,дерматолог,эстет' },
@@ -318,6 +306,11 @@ export default function App() {
     return `Обновлено: ${t}`
   }, [sync])
 
+  const sectionVisibleDoctors = useMemo(
+    () => doctors.filter((d) => doctorMedia[d.mis_id]?.show_in_sections !== false),
+    [doctors, doctorMedia],
+  )
+
   if (isAdminMode) {
     return <AdminPanel doctors={doctors} syncLabel={syncLabel} />
   }
@@ -333,9 +326,10 @@ export default function App() {
         {loading && <div className="empty-hint">Загрузка…</div>}
         {!loading && view.kind === 'home' && (
           <HomeTiles
-            doctors={doctors}
+            doctors={sectionVisibleDoctors}
+            doctorMedia={doctorMedia}
             onOpenConsumer={() => setView({ kind: 'consumer' })}
-            onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
+            onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
             onOpenGroup={(title, doctorsInGroup) => setView({ kind: 'doctors', title, doctors: doctorsInGroup })}
             onOpenDoctor={(doctor) => setView({ kind: 'doctor', doctor })}
             onOpenPromos={() => setView({ kind: 'promos' })}
@@ -395,7 +389,7 @@ export default function App() {
           <DoctorSchedule
             doctor={view.doctor}
             doctorPhoto={doctorMedia[view.doctor.mis_id]?.photo_url}
-            onBack={() => setView({ kind: 'doctors', title: 'Все врачи', doctors })}
+            onBack={() => setView({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
             onBooked={() => {
               void refreshMeta()
               setView({ kind: 'home' })
@@ -409,6 +403,7 @@ export default function App() {
 
 function HomeTiles({
   doctors,
+  doctorMedia,
   onOpenConsumer,
   onOpenDoctors,
   onOpenGroup,
@@ -419,6 +414,7 @@ function HomeTiles({
   banners,
 }: {
   doctors: Employee[]
+  doctorMedia: Record<string, AdminDoctorMedia>
   onOpenConsumer: () => void
   onOpenDoctors: () => void
   onOpenGroup: (title: string, doctorsInGroup: Employee[]) => void
@@ -443,15 +439,18 @@ function HomeTiles({
     (needles: string[]) => {
       const qs = needles.map((x) => x.trim().toLowerCase()).filter(Boolean)
       return doctors.filter((d) => {
+        if (doctorMedia[d.mis_id]?.show_in_sections === false) return false
         const s = (d.specialty ?? '').toLowerCase()
-        const tokens = s.split(/[^a-zа-я0-9]+/i).filter(Boolean)
+        const fio = (d.full_name ?? '').toLowerCase()
+        const haystack = `${s} ${fio}`.trim()
+        const tokens = haystack.split(/[^a-zа-я0-9]+/i).filter(Boolean)
         return qs.some((q) => {
           if (q.length <= 2) return tokens.includes(q)
-          return s.includes(q)
+          return haystack.includes(q)
         })
       })
     },
-    [doctors],
+    [doctorMedia, doctors],
   )
 
   const parsedTiles = useMemo(() => {
@@ -480,7 +479,7 @@ function HomeTiles({
         tile_type: 'main',
         size: 'large',
         sort_order: -999,
-        specialty_filters: DIAGNOSTIC_GROUPS.flatMap((g) => g.specialties).join(','),
+        specialty_filters: FUNCTIONAL_COMMON_FILTERS,
         image_url: null,
         is_active: true,
       },
@@ -638,7 +637,12 @@ function HomeTiles({
 
   const openByFilters = useCallback(
     (title: string, filters: string | null, directSingle: boolean = false) => {
-      const needles = (filters ?? '')
+      const normalizedTitle = title.trim().toLocaleLowerCase('ru-RU')
+      const effectiveFilters =
+        normalizedTitle === 'инструментальная диагностика'
+          ? FUNCTIONAL_COMMON_FILTERS
+          : (filters ?? '')
+      const needles = effectiveFilters
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean)
@@ -1447,6 +1451,7 @@ function DoctorSchedule({
   const [monthLoading, setMonthLoading] = useState(false)
   const [monthAvailability, setMonthAvailability] = useState<Record<string, boolean>>({})
   const todayStart = useMemo(() => startOfDay(new Date()), [])
+  const todayKeyMoscow = useMemo(() => dateKeyMoscow(new Date()), [])
 
   useEffect(() => {
     let cancelled = false
@@ -1485,7 +1490,7 @@ function DoctorSchedule({
     setDay((d) => {
       const n = new Date(d)
       n.setDate(n.getDate() + delta)
-      if (startOfDay(n) < todayStart) return new Date(todayStart)
+      if (dateKeyMoscow(n) < todayKeyMoscow) return new Date(todayStart)
       return n
     })
   }
@@ -1534,7 +1539,7 @@ function DoctorSchedule({
       days.map(async (d) => {
         try {
           const rows = await fetchFreeSlots(doctor.mis_id, d)
-          const hasFree = startOfDay(d) >= todayStart && rows.length > 0
+          const hasFree = dateKeyMoscow(d) >= todayKeyMoscow && rows.length > 0
           return [dateKeyMoscow(d), hasFree] as const
         } catch {
           return [dateKeyMoscow(d), false] as const
@@ -1553,7 +1558,7 @@ function DoctorSchedule({
     return () => {
       cancelled = true
     }
-  }, [doctor.mis_id, monthCursor, monthOpen, period, todayStart])
+  }, [doctor.mis_id, monthCursor, monthOpen, period, todayKeyMoscow])
 
   return (
     <>
@@ -1625,7 +1630,7 @@ function DoctorSchedule({
               <div className="doctor-week-days">
                 {weekDays.map((d) => (
                   (() => {
-                    const isPastDay = startOfDay(d) < todayStart
+                    const isPastDay = dateKeyMoscow(d) < todayKeyMoscow
                     return (
                   <button
                     key={dateKeyMoscow(d)}
@@ -1691,7 +1696,7 @@ function DoctorSchedule({
               <div className="doctor-calendar-grid">
                 {calendarCells.map((cell) => {
                   const key = dateKeyMoscow(cell.date)
-                  const isPastDay = startOfDay(cell.date) < todayStart
+                  const isPastDay = dateKeyMoscow(cell.date) < todayKeyMoscow
                   const available = !isPastDay && !!monthAvailability[key]
                   const selected = dateKeyMoscow(cell.date) === dateKeyMoscow(day)
                   return (
@@ -2020,6 +2025,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [doctorBadge1, setDoctorBadge1] = useState('')
   const [doctorBadge2, setDoctorBadge2] = useState('')
   const [doctorBadge3, setDoctorBadge3] = useState('')
+  const [doctorShowInSections, setDoctorShowInSections] = useState(true)
   const [doctorSurname, setDoctorSurname] = useState('')
   const [doctorName, setDoctorName] = useState('')
   const [doctorPatronymic, setDoctorPatronymic] = useState('')
@@ -2174,6 +2180,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
       setDoctorBadge1('')
       setDoctorBadge2('')
       setDoctorBadge3('')
+      setDoctorShowInSections(true)
       setDoctorSurname('')
       setDoctorName('')
       setDoctorPatronymic('')
@@ -2186,6 +2193,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setDoctorBadge1(selected?.badge1_label ?? '')
     setDoctorBadge2(selected?.badge2_label ?? '')
     setDoctorBadge3(selected?.badge3_label ?? '')
+    setDoctorShowInSections(selected?.show_in_sections !== false)
     setDoctorSurname(doc?.surname ?? '')
     setDoctorName(doc?.name ?? '')
     setDoctorPatronymic(doc?.patronymic ?? '')
@@ -2205,7 +2213,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
         <button type="button" className={`admin-tab ${adminTab === 'documents' ? 'active' : ''}`} onClick={() => setAdminTab('documents')}>Документы</button>
         <button type="button" className={`admin-tab ${adminTab === 'banners' ? 'active' : ''}`} onClick={() => setAdminTab('banners')}>Акции</button>
         <button type="button" className={`admin-tab ${adminTab === 'checkups' ? 'active' : ''}`} onClick={() => setAdminTab('checkups')}>Check-up</button>
-        <button type="button" className={`admin-tab ${adminTab === 'doctors' ? 'active' : ''}`} onClick={() => setAdminTab('doctors')}>Фото врачей</button>
+        <button type="button" className={`admin-tab ${adminTab === 'doctors' ? 'active' : ''}`} onClick={() => setAdminTab('doctors')}>Врачи</button>
       </div>
 
       {adminTab === 'tiles' && (
@@ -3187,6 +3195,14 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           <input placeholder="Приписка 1 (зеленая)" value={doctorBadge1} onChange={(e) => setDoctorBadge1(e.target.value)} />
           <input placeholder="Приписка 2 (фиолетовая)" value={doctorBadge2} onChange={(e) => setDoctorBadge2(e.target.value)} />
           <input placeholder="Приписка 3 (желтая)" value={doctorBadge3} onChange={(e) => setDoctorBadge3(e.target.value)} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <input
+              type="checkbox"
+              checked={doctorShowInSections}
+              onChange={(e) => setDoctorShowInSections(e.target.checked)}
+            />
+            <span>Показывать в разделах по врачам</span>
+          </label>
           <input
             type="file"
             accept="image/*"
@@ -3217,6 +3233,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 badge1_label: doctorBadge1.trim() || null,
                 badge2_label: doctorBadge2.trim() || null,
                 badge3_label: doctorBadge3.trim() || null,
+                show_in_sections: doctorShowInSections,
               })
               setStatus('ФИО и данные врача сохранены')
               await reload()
@@ -3236,6 +3253,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                   {m.badge1_label && <div className="meta">Приписка 1: {m.badge1_label}</div>}
                   {m.badge2_label && <div className="meta">Приписка 2: {m.badge2_label}</div>}
                   {m.badge3_label && <div className="meta">Приписка 3: {m.badge3_label}</div>}
+                  <div className="meta">В разделах по врачам: {m.show_in_sections === false ? 'скрыт' : 'показан'}</div>
                 </div>
                 <button
                   type="button"

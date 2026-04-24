@@ -191,6 +191,7 @@ class DoctorMedia(Base):
     badge1_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     badge2_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     badge3_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    show_in_sections: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 

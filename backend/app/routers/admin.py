@@ -170,6 +170,9 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
         existing.badge1_label = payload.badge1_label
         existing.badge2_label = payload.badge2_label
         existing.badge3_label = payload.badge3_label
+        existing.show_in_sections = payload.show_in_sections
+    if existing.employee_mis_id and db.get(Employee, existing.employee_mis_id) is None:
+        raise HTTPException(status_code=404, detail="doctor not found")
     db.commit()
     db.refresh(existing)
     return existing
