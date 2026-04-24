@@ -41,6 +41,13 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _compact_error_message(err: Exception, max_len: int = 1200) -> str:
+    message = str(err).strip()
+    if len(message) <= max_len:
+        return message
+    return f"{message[:max_len]}... [truncated]"
+
+
 def _ensure_sync_state_row(db: Session) -> SyncState:
     row = db.get(SyncState, 1)
     if row is None:
@@ -859,7 +866,7 @@ async def run_full_sync(db: Session) -> SyncRun:
         logger.exception("sync failed")
         db.rollback()
         run.ok = False
-        run.message = str(e)
+        run.message = _compact_error_message(e)
     finally:
         run.finished_at = _utcnow()
         try:
@@ -898,7 +905,7 @@ async def run_slots_sync(db: Session) -> SyncRun:
         logger.exception("slots-only sync failed")
         db.rollback()
         run.ok = False
-        run.message = str(e)
+        run.message = _compact_error_message(e)
     finally:
         run.finished_at = _utcnow()
         try:

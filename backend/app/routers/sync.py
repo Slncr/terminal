@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _status_message(msg: str | None, max_len: int = 400) -> str | None:
+    if not msg:
+        return None
+    if len(msg) <= max_len:
+        return msg
+    return f"{msg[:max_len]}... [truncated]"
+
+
 @router.post("/run")
 async def trigger_sync(db: Session = Depends(get_db)) -> dict[str, str]:
     run = await run_full_sync(db)
@@ -29,5 +37,5 @@ def sync_status(db: Session = Depends(get_db)) -> SyncStatusOut:
         last_sync_at=row.finished_at or row.started_at,
         last_ok=row.ok,
         full_sync_done=done,
-        message=row.message,
+        message=_status_message(row.message),
     )

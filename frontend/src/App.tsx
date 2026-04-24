@@ -733,7 +733,7 @@ function HomeTiles({
 
       <div className="home-head">
         <div className="logo-mark">
-          <img src="/logo.svg" alt="Евродон" className="logo-mark-img" />
+          <img src="/logo.svg" alt="Евродон" className="logo-mark-img" decoding="async" />
         </div>
         <h1>Добро пожаловать</h1>
       </div>
@@ -897,7 +897,7 @@ function PromoDetails({ banner, onBack }: { banner: AdminBanner; onBack: () => v
           <h3 className="promo-details-title">{banner.title}</h3>
           <div className="promo-details-body">
             <div className="promo-details-image-wrap promo-details-image-wrap-small">
-              <img src={banner.image_url} alt={banner.title} className="promo-details-image" />
+              <img src={banner.image_url} alt={banner.title} className="promo-details-image" loading="lazy" decoding="async" />
             </div>
             <div className="promo-details-right">
               <div className="promo-details-text">{banner.description?.trim() || 'Описание акции скоро появится.'}</div>
@@ -1073,7 +1073,7 @@ function CheckupGrid({
           <button key={item.id} type="button" className="checkup-list-card" onClick={() => onPick(item)}>
             <div className="checkup-list-card-image-wrap">
               {item.list_image_url || item.image_url ? (
-                <img src={item.list_image_url || item.image_url || ''} alt={item.title} className="checkup-list-card-image" />
+                <img src={item.list_image_url || item.image_url || ''} alt={item.title} className="checkup-list-card-image" loading="lazy" decoding="async" />
               ) : (
                 <div className="checkup-list-card-empty">Изображение</div>
               )}
@@ -1371,7 +1371,7 @@ function ConsumerDocPreviewModal({ docUrl, onClose }: { docUrl: string; onClose:
           </button>
         </div>
         <div className="consumer-doc-preview">
-          <iframe title="Просмотр документа" src={docUrl} className="consumer-doc-frame" />
+          <iframe title="Просмотр документа" src={docUrl} className="consumer-doc-frame" loading="lazy" />
         </div>
       </div>
     </div>
@@ -1575,7 +1575,7 @@ function DoctorSchedule({
       <section className="doctor-booking-card">
         <div className="doctor-booking-photo-wrap">
           {doctorPhoto ? (
-            <img src={doctorPhoto} alt={doctor.full_name} className="doctor-booking-photo" />
+            <img src={doctorPhoto} alt={doctor.full_name} className="doctor-booking-photo" loading="lazy" decoding="async" />
           ) : (
             <div className="doctor-booking-photo-fallback" />
           )}
@@ -1893,7 +1893,7 @@ function BookingModal({
             <div className="booking-doctor-row">
               <div className="booking-doctor-avatar">
                 {doctorPhoto ? (
-                  <img src={doctorPhoto} alt={doctor.full_name} className="booking-doctor-avatar-img" />
+                  <img src={doctorPhoto} alt={doctor.full_name} className="booking-doctor-avatar-img" loading="lazy" decoding="async" />
                 ) : (
                   <div className="booking-doctor-avatar-fallback" />
                 )}
