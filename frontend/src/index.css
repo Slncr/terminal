@@ -110,7 +110,7 @@ button {
 
 .consumer-doc-title {
   color: #3c3c3b;
-  font-size: 1.5rem;
+  font-size: 1rem;
   line-height: 1.25;
   font-weight: 400;
 }
@@ -737,6 +737,37 @@ main {
   font-size: 1rem;
   line-height: 1.2;
   font-weight: 400;
+}
+
+.doctor-card-badges {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.doctor-card-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 0.92rem;
+  line-height: 1;
+  color: #3c3c3b;
+  white-space: nowrap;
+}
+
+.doctor-card-badge--1 {
+  background: #c6efe0;
+}
+
+.doctor-card-badge--2 {
+  background: #d9dbf3;
+}
+
+.doctor-card-badge--3 {
+  background: #e8e2a9;
 }
 
 .doctor-card-btn {
@@ -1613,8 +1644,8 @@ main {
 .checkup-details-top {
   display: grid;
   grid-template-columns: 1fr 714px;
-  height: 300px;
-  min-height: 300px;
+  height: min(300px, 34vh);
+  min-height: 220px;
   max-height: 300px;
   background: #ffffff;
   width: 100%;
@@ -1624,7 +1655,8 @@ main {
 }
 
 .checkup-details-texts {
-  padding: 1.2rem 1.4rem 1rem;
+  padding: 0.9rem 1.1rem 0.75rem;
+  overflow: hidden;
 }
 
 .checkup-details-texts h3 {
@@ -1635,8 +1667,8 @@ main {
 }
 
 .checkup-details-price {
-  margin-top: 1rem;
-  font-size: 2rem;
+  margin-top: 0.55rem;
+  font-size: 1.65rem;
   font-weight: 600;
   color: #253349;
 }
@@ -1644,7 +1676,7 @@ main {
 .checkup-details-image-wrap {
   width: 714px;
   min-width: 714px;
-  height: 300px;
+  height: min(300px, 34vh);
   justify-self: end;
   margin-right: 0;
   border-left: 0;
@@ -1661,9 +1693,9 @@ main {
 
 .checkup-details-extra {
   border: 0;
-  padding: 0.95rem 1.2rem 1.1rem;
+  padding: 0.6rem 1rem 0.7rem;
   background: transparent;
-  margin-top: 0.7rem;
+  margin-top: 0.3rem;
 }
 
 .checkup-details-bullets-box {
@@ -1684,7 +1716,7 @@ main {
 .checkup-details-bullets {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem 1.25rem;
+  gap: 0.65rem 1rem;
 }
 
 .checkup-bullet-list {
@@ -1720,7 +1752,7 @@ main {
 }
 
 .checkup-details-footer-text {
-  margin-top: 2.8rem;
+  margin-top: 0.55rem;
   max-width: 50%;
   color: #2f394b;
   font-size: 0.95rem;
@@ -1732,7 +1764,7 @@ main {
 }
 
 .checkup-details-bottom-row {
-  margin-top: 0.8rem;
+  margin-top: 0.45rem;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 1rem;
@@ -1752,6 +1784,62 @@ main {
   line-height: 1.2;
   white-space: nowrap;
 }
+
+.checkup-article-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 10px 18px;
+}
+
+.checkup-article-heading,
+.checkup-article-subheading,
+.checkup-article-paragraph {
+  margin: 0;
+  line-height: 1.3;
+  white-space: pre-wrap;
+}
+
+.checkup-article-list {
+  margin: 0;
+  padding-left: 28px;
+  line-height: 1.35;
+}
+
+.checkup-article-list li + li {
+  margin-top: 8px;
+}
+
+.admin-checkup-blocks-editor {
+  grid-column: 1 / -1;
+  border: 1px solid #dce5f3;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.admin-builder-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-builder-item {
+  border: 1px solid #dce5f3;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-builder-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
 
 .checkup-preview-full {
   border: 1px solid #dde7f4;
@@ -1938,6 +2026,7 @@ main {
   .admin-grid--doctors {
     grid-template-columns: 1fr;
   }
+
 }
 
 .doctors-page-head {

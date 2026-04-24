@@ -136,12 +136,21 @@ class DoctorMediaIn(BaseModel):
     employee_mis_id: str
     photo_url: str
     experience_label: str | None = None
+    badge1_label: str | None = None
+    badge2_label: str | None = None
+    badge3_label: str | None = None
 
 
 class DoctorMediaOut(DoctorMediaIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+
+
+class EmployeeNameIn(BaseModel):
+    surname: str
+    name: str
+    patronymic: str | None = None
 
 
 class CheckupItemIn(BaseModel):
@@ -161,6 +170,7 @@ class CheckupItemIn(BaseModel):
     post_info_text: str | None = None
     cta_text: str | None = None
     registry_note: str | None = None
+    content_json: str | None = None
     sort_order: int = 0
     is_active: bool = True
 
@@ -187,3 +197,11 @@ class CheckupGroupTileOut(CheckupGroupTileIn):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+
+
+class FeatureFlagIn(BaseModel):
+    enabled: bool
+
+
+class FeatureFlagOut(FeatureFlagIn):
+    key: str

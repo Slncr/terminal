@@ -11,12 +11,14 @@ import {
   deleteAdminCheckupGroup,
   deleteAdminDocument,
   deleteAdminDoctorMedia,
+  updateAdminDoctorName,
   deleteAdminTile,
   fetchDaySlots,
   fetchFreeSlots,
   fetchDoctorServices,
   fetchDoctors,
   fetchSyncStatus,
+  getCheckupsFeatureFlag,
   getAppointment,
   listAdminBanners,
   listAdminCheckups,
@@ -28,6 +30,7 @@ import {
   updateAdminBanner,
   updateAdminCheckup,
   updateAdminCheckupGroup,
+  setCheckupsFeatureFlag,
   upsertAdminDoctorMedia,
   type AdminBanner,
   type AdminCheckupGroupTile,
@@ -80,7 +83,7 @@ const DIAGNOSTIC_GROUPS: DoctorGroup[] = [
   { title: 'Рентген', specialties: ['рентген'] },
   { title: 'УЗИ', specialties: ['узи', 'ультразвук'] },
   { title: 'Эндоскопия', specialties: ['эндоскоп'] },
-  { title: 'Функциональная диагностика', specialties: ['функциональн', 'ээг', 'эхо'] },
+  { title: 'Функциональная диагностика', specialties: ['экг', 'ээг', 'мрт', 'магнитно-резонанс', 'кт', 'компьютерн', 'рентген'] },
 ]
 
 const FIXED_TILE_PRESETS: FixedTilePreset[] = [
@@ -163,6 +166,84 @@ function displayCheckupCategory(value: string | null | undefined): string {
   return trimmed || 'Общий'
 }
 
+type CheckupContentBlock = {
+  id: string
+  type: 'heading' | 'subheading' | 'paragraph' | 'list'
+  text: string
+  font_size: number
+  is_bold: boolean
+}
+
+function parseCheckupContentJson(raw: string | null | undefined): CheckupContentBlock[] {
+  if (!raw?.trim()) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+      .map((x, idx) => ({
+        id: String(x.id ?? `block-${idx}`),
+        type: (['heading', 'subheading', 'paragraph', 'list'].includes(String(x.type))
+          ? String(x.type)
+          : 'paragraph') as CheckupContentBlock['type'],
+        text: String(x.text ?? ''),
+        font_size: Math.max(14, Math.min(64, Number(x.font_size ?? 24))),
+        is_bold: Boolean(x.is_bold),
+      }))
+  } catch {
+    return []
+  }
+}
+
+function createCheckupContentBlock(type: CheckupContentBlock['type']): CheckupContentBlock {
+  const textByType: Record<CheckupContentBlock['type'], string> = {
+    heading: 'Новый заголовок',
+    subheading: 'Новый подзаголовок',
+    paragraph: 'Новый абзац',
+    list: 'Пункт 1\nПункт 2\nПункт 3',
+  }
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    text: textByType[type],
+    font_size: type === 'heading' ? 44 : type === 'subheading' ? 34 : 28,
+    is_bold: type !== 'paragraph',
+  }
+}
+
+function makeLegacyCheckupBlocks(item: {
+  title?: string | null
+  description?: string | null
+  included_left?: string | null
+  included_right?: string | null
+  post_info_text?: string | null
+  cta_text?: string | null
+  registry_note?: string | null
+}): CheckupContentBlock[] {
+  const out: CheckupContentBlock[] = []
+  const push = (type: CheckupContentBlock['type'], text: string, fontSize: number, isBold: boolean) => {
+    const value = text.trim()
+    if (!value) return
+    out.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      text: value,
+      font_size: fontSize,
+      is_bold: isBold,
+    })
+  }
+  push('heading', item.title ?? '', 50, false)
+  push('subheading', 'Описание услуги', 42, false)
+  push('paragraph', item.description ?? '', 30, false)
+  push('subheading', 'В чекап входят:', 42, false)
+  push('list', item.included_left ?? '', 28, false)
+  push('list', item.included_right ?? '', 28, false)
+  push('paragraph', item.post_info_text ?? '', 28, false)
+  push('paragraph', item.cta_text ?? '', 30, true)
+  push('paragraph', item.registry_note ?? '', 26, false)
+  return out
+}
+
 export default function App() {
   const isAdminMode = window.location.pathname.startsWith('/admin')
   const lastSyncSeenRef = useRef<string | null>(null)
@@ -176,11 +257,12 @@ export default function App() {
   const [banners, setBanners] = useState<AdminBanner[]>([])
   const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
   const [checkupGroups, setCheckupGroups] = useState<AdminCheckupGroupTile[]>([])
+  const [checkupsEnabled, setCheckupsEnabled] = useState(true)
   const [doctorMedia, setDoctorMedia] = useState<Record<string, AdminDoctorMedia>>({})
 
   const refreshMeta = useCallback(async () => {
     try {
-      const [d, st, t, docs, b, c, cg, dm] = await Promise.all([
+      const [d, st, t, docs, b, c, cg, dm, checkupFeature] = await Promise.all([
         fetchDoctors(),
         fetchSyncStatus(),
         listAdminTiles(),
@@ -189,6 +271,7 @@ export default function App() {
         listAdminCheckups(),
         listAdminCheckupGroups(),
         listAdminDoctorMedia(),
+        getCheckupsFeatureFlag(),
       ])
       setDoctors(d)
       setSync(st)
@@ -197,6 +280,7 @@ export default function App() {
       setBanners(b.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setCheckups(c.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
       setCheckupGroups(cg.filter((x) => x.is_active).sort((a, b) => a.sort_order - b.sort_order))
+      setCheckupsEnabled(checkupFeature.enabled)
       const map: Record<string, AdminDoctorMedia> = {}
       for (const row of dm) map[row.employee_mis_id] = row
       setDoctorMedia(map)
@@ -270,12 +354,16 @@ export default function App() {
           <PromoDetails banner={view.banner} onBack={() => setView({ kind: 'promos' })} />
         )}
         {!loading && view.kind === 'checkups' && (
-          <CheckupGroups
-            items={checkups}
-            groupTiles={checkupGroups}
-            onBack={() => setView({ kind: 'home' })}
-            onPickGroup={(groupTitle) => setView({ kind: 'checkup-group', groupTitle })}
-          />
+          checkupsEnabled ? (
+            <CheckupGroups
+              items={checkups}
+              groupTiles={checkupGroups}
+              onBack={() => setView({ kind: 'home' })}
+              onPickGroup={(groupTitle) => setView({ kind: 'checkup-group', groupTitle })}
+            />
+          ) : (
+            <div className="empty-hint">Раздел в разработке</div>
+          )
         )}
         {!loading && view.kind === 'checkup-group' && (
           <CheckupGrid
@@ -1017,6 +1105,18 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
   const footerText = item.post_info_text?.trim() || 'По итогам обследования врач даст рекомендации по питанию, режиму тренировок и восстановлению, чтобы спорт приносил только пользу.'
   const ctaText = item.cta_text?.trim() || `Запишитесь на чекап «${item.title}» в клинике Евродон – контролируйте здоровье и тренируйтесь с уверенностью!`
   const registryNote = item.registry_note?.trim() || 'Записаться можно на регистратуре'
+  const hasManualLegacyExtras =
+    Boolean(item.included_left?.trim()) ||
+    Boolean(item.included_right?.trim()) ||
+    Boolean(item.post_info_text?.trim()) ||
+    Boolean(item.cta_text?.trim()) ||
+    Boolean(item.registry_note?.trim())
+  const contentBlocks = useMemo(() => {
+    const explicit = parseCheckupContentJson(item.content_json)
+    if (explicit.length) return explicit
+    return makeLegacyCheckupBlocks(item)
+  }, [item])
+  const useArticleContent = contentBlocks.length > 0
 
   return (
     <>
@@ -1047,28 +1147,95 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
             </div>
           )}
         </div>
-        <div className="checkup-details-extra">
-          <div className="checkup-details-bullets-box">
-            <div className="checkup-details-extra-title">В чекап входят:</div>
-            <div className="checkup-details-bullets">
-              <ul className="checkup-bullet-list">
-                {(leftBullets.length ? leftBullets : defaultLeftBullets).map((text) => (
-                  <li key={text}>{text}</li>
-                ))}
-              </ul>
-              <ul className="checkup-bullet-list">
-                {(rightBullets.length ? rightBullets : defaultRightBullets).map((text) => (
-                  <li key={text}>{text}</li>
-                ))}
-              </ul>
+        {useArticleContent && (
+          <div className="checkup-article-view">
+            {contentBlocks.map((block) => {
+              const style = {
+                fontSize: `${block.font_size}px`,
+                fontWeight: block.is_bold ? 600 : 400,
+              }
+              if (block.type === 'heading') {
+                return (
+                  <h3 key={block.id} className="checkup-article-heading" style={style}>
+                    {block.text}
+                  </h3>
+                )
+              }
+              if (block.type === 'subheading') {
+                return (
+                  <h4 key={block.id} className="checkup-article-subheading" style={style}>
+                    {block.text}
+                  </h4>
+                )
+              }
+              if (block.type === 'list') {
+                const rows = block.text.split('\n').map((x) => x.trim()).filter(Boolean)
+                return (
+                  <ul key={block.id} className="checkup-article-list" style={style}>
+                    {rows.map((row, idx) => <li key={`${block.id}-${idx}`}>{row}</li>)}
+                  </ul>
+                )
+              }
+              return (
+                <p key={block.id} className="checkup-article-paragraph" style={style}>
+                  {block.text}
+                </p>
+              )
+            })}
+          </div>
+        )}
+        {useArticleContent && hasManualLegacyExtras && (
+          <div className="checkup-details-extra">
+            <div className="checkup-details-bullets-box">
+              <div className="checkup-details-extra-title">В чекап входят:</div>
+              <div className="checkup-details-bullets">
+                <ul className="checkup-bullet-list">
+                  {leftBullets.map((text) => (
+                    <li key={text}>{text}</li>
+                  ))}
+                </ul>
+                <ul className="checkup-bullet-list">
+                  {rightBullets.map((text) => (
+                    <li key={text}>{text}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
+            {!!item.post_info_text?.trim() && <div className="checkup-details-footer-text">{footerText}</div>}
+            {(Boolean(item.cta_text?.trim()) || Boolean(item.registry_note?.trim())) && (
+              <div className="checkup-details-bottom-row">
+                {!!item.cta_text?.trim() && <div className="checkup-details-note-strong">{ctaText}</div>}
+                {!!item.registry_note?.trim() && <div className="checkup-details-note-info">{registryNote}</div>}
+              </div>
+            )}
           </div>
-          <div className="checkup-details-footer-text">{footerText}</div>
-          <div className="checkup-details-bottom-row">
-            <div className="checkup-details-note-strong">{ctaText}</div>
-            <div className="checkup-details-note-info">{registryNote}</div>
-          </div>
-        </div>
+        )}
+        {!useArticleContent && (
+          <>
+            <div className="checkup-details-extra">
+              <div className="checkup-details-bullets-box">
+                <div className="checkup-details-extra-title">В чекап входят:</div>
+                <div className="checkup-details-bullets">
+                  <ul className="checkup-bullet-list">
+                    {(leftBullets.length ? leftBullets : defaultLeftBullets).map((text) => (
+                      <li key={text}>{text}</li>
+                    ))}
+                  </ul>
+                  <ul className="checkup-bullet-list">
+                    {(rightBullets.length ? rightBullets : defaultRightBullets).map((text) => (
+                      <li key={text}>{text}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="checkup-details-footer-text">{footerText}</div>
+              <div className="checkup-details-bottom-row">
+                <div className="checkup-details-note-strong">{ctaText}</div>
+                <div className="checkup-details-note-info">{registryNote}</div>
+              </div>
+            </div>
+          </>
+        )}
       </section>
     </>
   )
@@ -1163,6 +1330,19 @@ function DoctorGrid({
                 <h2 className="doctor-card-name">{d.full_name}</h2>
                 {doctorMedia[d.mis_id]?.experience_label && (
                   <div className="doctor-card-experience">Стаж работы: {doctorMedia[d.mis_id].experience_label}</div>
+                )}
+                {(doctorMedia[d.mis_id]?.badge1_label || doctorMedia[d.mis_id]?.badge2_label || doctorMedia[d.mis_id]?.badge3_label) && (
+                  <div className="doctor-card-badges">
+                    {doctorMedia[d.mis_id]?.badge1_label && (
+                      <span className="doctor-card-badge doctor-card-badge--1">{doctorMedia[d.mis_id].badge1_label}</span>
+                    )}
+                    {doctorMedia[d.mis_id]?.badge2_label && (
+                      <span className="doctor-card-badge doctor-card-badge--2">{doctorMedia[d.mis_id].badge2_label}</span>
+                    )}
+                    {doctorMedia[d.mis_id]?.badge3_label && (
+                      <span className="doctor-card-badge doctor-card-badge--3">{doctorMedia[d.mis_id].badge3_label}</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1775,6 +1955,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [banners, setBanners] = useState<AdminBanner[]>([])
   const [checkups, setCheckups] = useState<AdminCheckupItem[]>([])
   const [checkupGroupTiles, setCheckupGroupTiles] = useState<AdminCheckupGroupTile[]>([])
+  const [checkupsFeatureEnabled, setCheckupsFeatureEnabled] = useState(true)
   const [media, setMedia] = useState<AdminDoctorMedia[]>([])
   const [status, setStatus] = useState<string>('')
 
@@ -1820,6 +2001,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [checkupPostInfoText, setCheckupPostInfoText] = useState('')
   const [checkupCtaText, setCheckupCtaText] = useState('')
   const [checkupRegistryNote, setCheckupRegistryNote] = useState('')
+  const [checkupContentBlocks, setCheckupContentBlocks] = useState<CheckupContentBlock[]>([])
   const [checkupSort, setCheckupSort] = useState(0)
   const [checkupEditId, setCheckupEditId] = useState('')
   const [checkupGroupEditId, setCheckupGroupEditId] = useState('')
@@ -1835,15 +2017,22 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [doctorId, setDoctorId] = useState('')
   const [doctorPhoto, setDoctorPhoto] = useState('')
   const [doctorExperience, setDoctorExperience] = useState('')
+  const [doctorBadge1, setDoctorBadge1] = useState('')
+  const [doctorBadge2, setDoctorBadge2] = useState('')
+  const [doctorBadge3, setDoctorBadge3] = useState('')
+  const [doctorSurname, setDoctorSurname] = useState('')
+  const [doctorName, setDoctorName] = useState('')
+  const [doctorPatronymic, setDoctorPatronymic] = useState('')
 
   const reload = useCallback(async () => {
-    const [t, d, b, c, cg, m] = await Promise.all([
+    const [t, d, b, c, cg, m, feature] = await Promise.all([
       listAdminTiles(),
       listAdminDocuments(),
       listAdminBanners(),
       listAdminCheckups(),
       listAdminCheckupGroups(),
       listAdminDoctorMedia(),
+      getCheckupsFeatureFlag(),
     ])
     setTiles(t)
     setDocuments(d)
@@ -1851,6 +2040,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setCheckups(c)
     setCheckupGroupTiles(cg)
     setMedia(m)
+    setCheckupsFeatureEnabled(feature.enabled)
   }, [])
 
   useEffect(() => {
@@ -1926,6 +2116,10 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setCheckupPostInfoText(selectedCheckup.post_info_text ?? '')
     setCheckupCtaText(selectedCheckup.cta_text ?? '')
     setCheckupRegistryNote(selectedCheckup.registry_note ?? '')
+    {
+      const explicit = parseCheckupContentJson(selectedCheckup.content_json)
+      setCheckupContentBlocks(explicit.length ? explicit : makeLegacyCheckupBlocks(selectedCheckup))
+    }
     setCheckupSort(Number(selectedCheckup.sort_order ?? 0))
   }, [selectedCheckup?.id])
   useEffect(() => {
@@ -1977,12 +2171,25 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     if (!doctorId) {
       setDoctorPhoto('')
       setDoctorExperience('')
+      setDoctorBadge1('')
+      setDoctorBadge2('')
+      setDoctorBadge3('')
+      setDoctorSurname('')
+      setDoctorName('')
+      setDoctorPatronymic('')
       return
     }
     const selected = media.find((m) => m.employee_mis_id === doctorId)
+    const doc = doctors.find((d) => d.mis_id === doctorId)
     setDoctorPhoto(selected?.photo_url ?? '')
     setDoctorExperience(selected?.experience_label ?? '')
-  }, [doctorId, media])
+    setDoctorBadge1(selected?.badge1_label ?? '')
+    setDoctorBadge2(selected?.badge2_label ?? '')
+    setDoctorBadge3(selected?.badge3_label ?? '')
+    setDoctorSurname(doc?.surname ?? '')
+    setDoctorName(doc?.name ?? '')
+    setDoctorPatronymic(doc?.patronymic ?? '')
+  }, [doctorId, media, doctors])
 
   return (
     <main className="admin-shell">
@@ -2471,6 +2678,25 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
       {adminTab === 'checkups' && (
       <div className="card admin-card" style={{ marginBottom: '1rem' }}>
         <h2>Контент страницы Check-up</h2>
+        <div className="admin-row" style={{ marginBottom: '0.75rem' }}>
+          <div>
+            <strong>Общий экран Check-up</strong>
+            <div className="meta">Если выключено, пользователи увидят заглушку "Раздел в разработке".</div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <input
+              type="checkbox"
+              checked={checkupsFeatureEnabled}
+              onChange={async (e) => {
+                const enabled = e.target.checked
+                setCheckupsFeatureEnabled(enabled)
+                await setCheckupsFeatureFlag(enabled)
+                setStatus(enabled ? 'Раздел Check-up включен' : 'Раздел Check-up скрыт (в разработке)')
+              }}
+            />
+            <span>{checkupsFeatureEnabled ? 'Включено' : 'Выключено'}</span>
+          </label>
+        </div>
         <div className="admin-subtitle">Плитки главного экрана Check-up</div>
         <div className="form-grid admin-grid admin-grid--checkups" style={{ marginBottom: '0.85rem' }}>
           <label>
@@ -2689,6 +2915,74 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             value={checkupRegistryNote}
             onChange={(e) => setCheckupRegistryNote(e.target.value)}
           />
+          <div className="admin-checkup-blocks-editor">
+            <div className="admin-subtitle">Контент внутри страницы (заголовки, абзацы, списки)</div>
+            <div className="admin-builder-tools">
+              <button type="button" className="btn-ghost" onClick={() => setCheckupContentBlocks((prev) => [...prev, createCheckupContentBlock('heading')])}>+ Заголовок</button>
+              <button type="button" className="btn-ghost" onClick={() => setCheckupContentBlocks((prev) => [...prev, createCheckupContentBlock('subheading')])}>+ Подзаголовок</button>
+              <button type="button" className="btn-ghost" onClick={() => setCheckupContentBlocks((prev) => [...prev, createCheckupContentBlock('paragraph')])}>+ Абзац</button>
+              <button type="button" className="btn-ghost" onClick={() => setCheckupContentBlocks((prev) => [...prev, createCheckupContentBlock('list')])}>+ Список</button>
+            </div>
+            <div className="admin-list" style={{ marginTop: '0.5rem' }}>
+              {checkupContentBlocks.map((block) => (
+                <div key={block.id} className="admin-builder-item">
+                  <div className="admin-builder-item-head">
+                    <strong>{block.type === 'heading' ? 'Заголовок' : block.type === 'subheading' ? 'Подзаголовок' : block.type === 'list' ? 'Список' : 'Абзац'}</strong>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => setCheckupContentBlocks((prev) => prev.filter((x) => x.id !== block.id))}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                  <textarea
+                    value={block.text}
+                    onChange={(e) =>
+                      setCheckupContentBlocks((prev) => prev.map((x) => (x.id === block.id ? { ...x, text: e.target.value } : x)))
+                    }
+                    placeholder={block.type === 'list' ? 'Каждый пункт с новой строки' : 'Текст блока'}
+                  />
+                  <div className="admin-builder-tools">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() =>
+                        setCheckupContentBlocks((prev) =>
+                          prev.map((x) => (x.id === block.id ? { ...x, font_size: Math.max(14, x.font_size - 2) } : x)),
+                        )
+                      }
+                    >
+                      A-
+                    </button>
+                    <span className="meta">Размер: {block.font_size}px</span>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() =>
+                        setCheckupContentBlocks((prev) =>
+                          prev.map((x) => (x.id === block.id ? { ...x, font_size: Math.min(64, x.font_size + 2) } : x)),
+                        )
+                      }
+                    >
+                      A+
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-ghost ${block.is_bold ? 'active' : ''}`}
+                      onClick={() =>
+                        setCheckupContentBlocks((prev) =>
+                          prev.map((x) => (x.id === block.id ? { ...x, is_bold: !x.is_bold } : x)),
+                        )
+                      }
+                    >
+                      Жирный
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           <button
             className="btn-primary"
             onClick={async () => {
@@ -2709,6 +3003,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 post_info_text: checkupPostInfoText || null,
                 cta_text: checkupCtaText || null,
                 registry_note: checkupRegistryNote || null,
+                content_json: checkupContentBlocks.length ? JSON.stringify(checkupContentBlocks) : null,
                 sort_order: checkupSort,
                 is_active: true,
               }
@@ -2736,6 +3031,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               setCheckupPostInfoText('')
               setCheckupCtaText('')
               setCheckupRegistryNote('')
+              setCheckupContentBlocks([])
               setCheckupSort(0)
               await reload()
             }}
@@ -2786,6 +3082,52 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                   </div>
                 )}
               </div>
+              {checkupContentBlocks.length > 0 ? (
+                <div className="checkup-article-view">
+                  {checkupContentBlocks.map((block) => (
+                    <div key={block.id} style={{ fontSize: `${block.font_size}px`, fontWeight: block.is_bold ? 600 : 400 }}>
+                      {block.type === 'list' ? (
+                        <ul className="checkup-article-list">
+                          {block.text.split('\n').map((x) => x.trim()).filter(Boolean).map((row, idx) => (
+                            <li key={`${block.id}-${idx}`}>{row}</li>
+                          ))}
+                        </ul>
+                      ) : block.text}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {(checkupContentBlocks.length === 0 ||
+                Boolean(checkupIncludedLeft.trim()) ||
+                Boolean(checkupIncludedRight.trim()) ||
+                Boolean(checkupPostInfoText.trim()) ||
+                Boolean(checkupCtaText.trim()) ||
+                Boolean(checkupRegistryNote.trim())) && (
+                <div className="checkup-details-extra">
+                  <div className="checkup-details-bullets-box">
+                    <div className="checkup-details-extra-title">В чекап входят:</div>
+                    <div className="checkup-details-bullets">
+                      <ul className="checkup-bullet-list">
+                        {(checkupIncludedLeft.trim() ? checkupIncludedLeft.split('\n').map((x) => x.trim()).filter(Boolean) : []).map((text) => (
+                          <li key={`preview-left-${text}`}>{text}</li>
+                        ))}
+                      </ul>
+                      <ul className="checkup-bullet-list">
+                        {(checkupIncludedRight.trim() ? checkupIncludedRight.split('\n').map((x) => x.trim()).filter(Boolean) : []).map((text) => (
+                          <li key={`preview-right-${text}`}>{text}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  {!!checkupPostInfoText.trim() && <div className="checkup-details-footer-text">{checkupPostInfoText}</div>}
+                  {(Boolean(checkupCtaText.trim()) || Boolean(checkupRegistryNote.trim())) && (
+                    <div className="checkup-details-bottom-row">
+                      {!!checkupCtaText.trim() && <div className="checkup-details-note-strong">{checkupCtaText}</div>}
+                      {!!checkupRegistryNote.trim() && <div className="checkup-details-note-info">{checkupRegistryNote}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           </div>
         </div>
@@ -2834,11 +3176,17 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             ))}
           </select>
           <input placeholder="URL фото" value={doctorPhoto} onChange={(e) => setDoctorPhoto(e.target.value)} />
+          <input placeholder="Фамилия" value={doctorSurname} onChange={(e) => setDoctorSurname(e.target.value)} />
+          <input placeholder="Имя" value={doctorName} onChange={(e) => setDoctorName(e.target.value)} />
+          <input placeholder="Отчество" value={doctorPatronymic} onChange={(e) => setDoctorPatronymic(e.target.value)} />
           <input
             placeholder="Стаж работы (например: 12 лет)"
             value={doctorExperience}
             onChange={(e) => setDoctorExperience(e.target.value)}
           />
+          <input placeholder="Приписка 1 (зеленая)" value={doctorBadge1} onChange={(e) => setDoctorBadge1(e.target.value)} />
+          <input placeholder="Приписка 2 (фиолетовая)" value={doctorBadge2} onChange={(e) => setDoctorBadge2(e.target.value)} />
+          <input placeholder="Приписка 3 (желтая)" value={doctorBadge3} onChange={(e) => setDoctorBadge3(e.target.value)} />
           <input
             type="file"
             accept="image/*"
@@ -2853,12 +3201,24 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             className="btn-primary"
             onClick={async () => {
               if (!doctorId) return
+              if (!doctorSurname.trim() || !doctorName.trim()) {
+                setStatus('Для ФИО заполните фамилию и имя')
+                return
+              }
+              await updateAdminDoctorName(doctorId, {
+                surname: doctorSurname.trim(),
+                name: doctorName.trim(),
+                patronymic: doctorPatronymic.trim() || null,
+              })
               await upsertAdminDoctorMedia({
                 employee_mis_id: doctorId,
                 photo_url: doctorPhoto,
                 experience_label: doctorExperience.trim() || null,
+                badge1_label: doctorBadge1.trim() || null,
+                badge2_label: doctorBadge2.trim() || null,
+                badge3_label: doctorBadge3.trim() || null,
               })
-              setStatus('Данные врача сохранены')
+              setStatus('ФИО и данные врача сохранены')
               await reload()
             }}
           >
@@ -2873,6 +3233,9 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 <div>
                   <div className="meta">{m.employee_mis_id}</div>
                   {m.experience_label && <div className="meta">Стаж: {m.experience_label}</div>}
+                  {m.badge1_label && <div className="meta">Приписка 1: {m.badge1_label}</div>}
+                  {m.badge2_label && <div className="meta">Приписка 2: {m.badge2_label}</div>}
+                  {m.badge3_label && <div className="meta">Приписка 3: {m.badge3_label}</div>}
                 </div>
                 <button
                   type="button"

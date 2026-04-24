@@ -337,9 +337,8 @@ def _sync_employees_from_enlargement_rows(db: Session, rows: list[dict[str, Any]
         emp.raw_json = safe_json_dumps(row)
         emp.updated_at = _utcnow()
         n += 1
-    # Keep only doctors from target clinic in kiosk DB.
-    if keep_ids:
-        db.execute(delete(Employee).where(Employee.mis_id.not_in(keep_ids)))
+    # NOTE: do not hard-delete employees here; deleting referenced doctors can break
+    # FK integrity for availability tables during sync races.
     db.commit()
     return n
 
@@ -350,11 +349,18 @@ def _ingest_schedule_rows(
     default_employee_id: str | None,
 ) -> int:
     step = settings.slot_step_minutes
+    existing_employee_ids = {
+        str(x).strip().lower()
+        for x in db.scalars(select(Employee.mis_id)).all()
+        if str(x).strip()
+    }
     seen: set[tuple[str, datetime, datetime]] = set()
     payload: list[dict[str, Any]] = []
     for row in rows:
         eid = parse_employee_id(row) or default_employee_id
         if not eid:
+            continue
+        if str(eid).strip().lower() not in existing_employee_ids:
             continue
         for a, b in _extract_schedule_intervals(row, step):
             key = (eid, a, b)
@@ -390,11 +396,18 @@ def _ingest_busy_from_schedule_rows(
     default_employee_id: str | None,
 ) -> int:
     step = settings.slot_step_minutes
+    existing_employee_ids = {
+        str(x).strip().lower()
+        for x in db.scalars(select(Employee.mis_id)).all()
+        if str(x).strip()
+    }
     seen: set[tuple[str, datetime, datetime]] = set()
     payload: list[dict[str, Any]] = []
     for row in rows:
         eid = parse_employee_id(row) or default_employee_id
         if not eid:
+            continue
+        if str(eid).strip().lower() not in existing_employee_ids:
             continue
         cid = _extract_clinic_id(row)
         if not _clinic_allowed(cid):
@@ -482,6 +495,11 @@ async def _sync_tickets(db: Session, client: MisClient, start: datetime, end: da
     occ_seen: set[tuple[str, datetime, datetime, str | None]] = set()
     service_payload: list[dict[str, Any]] = []
     service_seen: set[str] = set()
+    existing_employee_ids = {
+        str(x).strip().lower()
+        for x in db.scalars(select(Employee.mis_id)).all()
+        if str(x).strip()
+    }
     for row in rows:
         s, e = slot_bounds(row)
         if s is None:
@@ -490,6 +508,8 @@ async def _sync_tickets(db: Session, client: MisClient, start: datetime, end: da
             e = s + timedelta(minutes=settings.slot_step_minutes)
         emp = parse_employee_id(row)
         if not emp:
+            continue
+        if str(emp).strip().lower() not in existing_employee_ids:
             continue
         if not _clinic_allowed(_extract_clinic_id(row)):
             continue

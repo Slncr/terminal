@@ -188,6 +188,9 @@ class DoctorMedia(Base):
     employee_mis_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.mis_id"), index=True)
     photo_url: Mapped[str] = mapped_column(String(512))
     experience_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    badge1_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    badge2_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    badge3_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
@@ -211,6 +214,7 @@ class CheckupItem(Base):
     post_info_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     cta_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     registry_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -229,4 +233,12 @@ class CheckupGroupTile(Base):
     image_scale: Mapped[int] = mapped_column(Integer, default=100)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class FeatureFlag(Base):
+    __tablename__ = "feature_flags"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

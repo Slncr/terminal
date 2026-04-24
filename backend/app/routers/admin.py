@@ -8,18 +8,21 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import CheckupGroupTile, CheckupItem, ConsumerDocument, DoctorMedia, HomeTile, PromoBanner
+from app.models import CheckupGroupTile, CheckupItem, ConsumerDocument, DoctorMedia, Employee, FeatureFlag, HomeTile, PromoBanner
 from app.schemas import (
     ConsumerDocumentIn,
     ConsumerDocumentOut,
     DoctorMediaIn,
     DoctorMediaOut,
+    EmployeeNameIn,
     HomeTileIn,
     HomeTileOut,
     CheckupGroupTileIn,
     CheckupGroupTileOut,
     CheckupItemIn,
     CheckupItemOut,
+    FeatureFlagIn,
+    FeatureFlagOut,
     PromoBannerIn,
     PromoBannerOut,
 )
@@ -164,6 +167,9 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
     else:
         existing.photo_url = payload.photo_url
         existing.experience_label = payload.experience_label
+        existing.badge1_label = payload.badge1_label
+        existing.badge2_label = payload.badge2_label
+        existing.badge3_label = payload.badge3_label
     db.commit()
     db.refresh(existing)
     return existing
@@ -172,6 +178,18 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
 @router.delete("/doctor-media/{employee_mis_id}")
 def delete_doctor_media(employee_mis_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
     db.execute(delete(DoctorMedia).where(DoctorMedia.employee_mis_id == employee_mis_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/doctors/{employee_mis_id}/name")
+def update_doctor_name(employee_mis_id: str, payload: EmployeeNameIn, db: Session = Depends(get_db)) -> dict[str, bool]:
+    row = db.get(Employee, employee_mis_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="doctor not found")
+    row.surname = payload.surname.strip() or row.surname
+    row.name = payload.name.strip() or row.name
+    row.patronymic = (payload.patronymic or "").strip() or None
     db.commit()
     return {"ok": True}
 
@@ -211,6 +229,7 @@ def update_checkup(checkup_id: str, payload: CheckupItemIn, db: Session = Depend
     row.post_info_text = payload.post_info_text
     row.cta_text = payload.cta_text
     row.registry_note = payload.registry_note
+    row.content_json = payload.content_json
     row.sort_order = payload.sort_order
     row.is_active = payload.is_active
     db.commit()
@@ -274,3 +293,27 @@ def delete_checkup_group(group_id: str, db: Session = Depends(get_db)) -> dict[s
     db.execute(delete(CheckupGroupTile).where(CheckupGroupTile.id == group_id))
     db.commit()
     return {"ok": True}
+
+
+@router.get("/features/checkups", response_model=FeatureFlagOut)
+def get_checkups_feature(db: Session = Depends(get_db)) -> FeatureFlag:
+    row = db.get(FeatureFlag, "checkups_enabled")
+    if row is None:
+        row = FeatureFlag(key="checkups_enabled", enabled=True)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+@router.put("/features/checkups", response_model=FeatureFlagOut)
+def update_checkups_feature(payload: FeatureFlagIn, db: Session = Depends(get_db)) -> FeatureFlag:
+    row = db.get(FeatureFlag, "checkups_enabled")
+    if row is None:
+        row = FeatureFlag(key="checkups_enabled", enabled=payload.enabled)
+        db.add(row)
+    else:
+        row.enabled = payload.enabled
+    db.commit()
+    db.refresh(row)
+    return row

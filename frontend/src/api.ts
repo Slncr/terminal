@@ -167,6 +167,9 @@ export type AdminDoctorMedia = {
   employee_mis_id: string
   photo_url: string
   experience_label: string | null
+  badge1_label?: string | null
+  badge2_label?: string | null
+  badge3_label?: string | null
 }
 
 export type AdminCheckupItem = {
@@ -187,6 +190,7 @@ export type AdminCheckupItem = {
   post_info_text?: string | null
   cta_text?: string | null
   registry_note?: string | null
+  content_json?: string | null
   sort_order: number
   is_active: boolean
 }
@@ -202,6 +206,11 @@ export type AdminCheckupGroupTile = {
   image_scale?: number
   sort_order: number
   is_active: boolean
+}
+
+export type FeatureFlag = {
+  key: string
+  enabled: boolean
 }
 
 export async function uploadAdminFile(file: File, folder: string): Promise<string> {
@@ -290,6 +299,9 @@ export async function upsertAdminDoctorMedia(body: {
   employee_mis_id: string
   photo_url: string
   experience_label?: string | null
+  badge1_label?: string | null
+  badge2_label?: string | null
+  badge3_label?: string | null
 }): Promise<AdminDoctorMedia> {
   const res = await fetch(`${API_BASE}/admin/doctor-media`, {
     method: 'POST',
@@ -301,6 +313,19 @@ export async function upsertAdminDoctorMedia(body: {
 
 export async function deleteAdminDoctorMedia(employeeId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/admin/doctor-media/${encodeURIComponent(employeeId)}`, { method: 'DELETE' })
+  await parseJson(res)
+}
+
+export async function updateAdminDoctorName(employeeId: string, body: {
+  surname: string
+  name: string
+  patronymic?: string | null
+}): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/doctors/${encodeURIComponent(employeeId)}/name`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
   await parseJson(res)
 }
 
@@ -358,4 +383,18 @@ export async function updateAdminCheckupGroup(id: string, body: Omit<AdminChecku
 export async function deleteAdminCheckupGroup(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/admin/checkup-groups/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJson(res)
+}
+
+export async function getCheckupsFeatureFlag(): Promise<FeatureFlag> {
+  const res = await fetch(`${API_BASE}/admin/features/checkups`)
+  return parseJson(res)
+}
+
+export async function setCheckupsFeatureFlag(enabled: boolean): Promise<FeatureFlag> {
+  const res = await fetch(`${API_BASE}/admin/features/checkups`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+  return parseJson(res)
 }
