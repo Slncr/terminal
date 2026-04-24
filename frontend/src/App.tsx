@@ -389,6 +389,7 @@ export default function App() {
           <DoctorSchedule
             doctor={view.doctor}
             doctorPhoto={doctorMedia[view.doctor.mis_id]?.photo_url}
+            doctorMeta={doctorMedia[view.doctor.mis_id]}
             onBack={() => setView({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
             onBooked={() => {
               void refreshMeta()
@@ -1425,11 +1426,13 @@ function ConsumerCornerScreen({ documents, onBack }: { documents: AdminDocument[
 function DoctorSchedule({
   doctor,
   doctorPhoto,
+  doctorMeta,
   onBack,
   onBooked,
 }: {
   doctor: Employee
   doctorPhoto?: string
+  doctorMeta?: AdminDoctorMedia
   onBack: () => void
   onBooked: () => void
 }) {
@@ -1581,7 +1584,20 @@ function DoctorSchedule({
         <div className="doctor-booking-content">
           {doctor.specialty && <div className="doctor-booking-specialty">{doctor.specialty}</div>}
           <h2 className="doctor-booking-name">{doctor.full_name}</h2>
-          <div className="doctor-booking-exp">Стаж работы с 2020 года</div>
+          {doctorMeta?.experience_label && <div className="doctor-booking-exp">Стаж работы: {doctorMeta.experience_label}</div>}
+          {(doctorMeta?.badge1_label || doctorMeta?.badge2_label || doctorMeta?.badge3_label) && (
+            <div className="doctor-booking-badges">
+              {doctorMeta?.badge1_label && (
+                <span className="doctor-card-badge doctor-card-badge--1">{doctorMeta.badge1_label}</span>
+              )}
+              {doctorMeta?.badge2_label && (
+                <span className="doctor-card-badge doctor-card-badge--2">{doctorMeta.badge2_label}</span>
+              )}
+              {doctorMeta?.badge3_label && (
+                <span className="doctor-card-badge doctor-card-badge--3">{doctorMeta.badge3_label}</span>
+              )}
+            </div>
+          )}
 
           {services.length > 0 && (
             <label className="doctor-service-label">
