@@ -1,42 +1,31 @@
 package com.eurodon.kiosk
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.View
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.SslErrorHandler
-import android.net.http.SslError
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import com.eurodon.kiosk.databinding.ActivityMainBinding
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoRuntimeSettings
+import org.mozilla.geckoview.GeckoSession
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var runtime: GeckoRuntime
+    private lateinit var session: GeckoSession
+    private var canNavigateBack: Boolean = false
 
     private val kioskUrl: String
         get() = intent?.getStringExtra(EXTRA_URL)?.takeIf { it.isNotBlank() }
             ?: getString(R.string.kiosk_url)
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         hideSystemUi()
-        configureWebView(binding.webView)
-
-        if (savedInstanceState == null) {
-            binding.webView.loadUrl(kioskUrl)
-        } else {
-            binding.webView.restoreState(savedInstanceState)
-        }
+        configureGeckoView()
+        loadKiosk()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -49,17 +38,19 @@ class MainActivity : AppCompatActivity() {
         hideSystemUi()
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        binding.webView.saveState(outState)
-    }
-
     override fun onBackPressed() {
-        if (binding.webView.canGoBack()) {
-            binding.webView.goBack()
+        if (::session.isInitialized && canNavigateBack) {
+            session.goBack()
         } else {
             super.onBackPressed()
         }
+    }
+
+    override fun onDestroy() {
+        if (::session.isInitialized) {
+            session.close()
+        }
+        super.onDestroy()
     }
 
     private fun hideSystemUi() {
@@ -74,71 +65,42 @@ class MainActivity : AppCompatActivity() {
             )
     }
 
-    private fun configureWebView(webView: WebView) {
-        webView.apply {
-            isLongClickable = false
-            isHapticFeedbackEnabled = false
-
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                mediaPlaybackRequiresUserGesture = false
-                builtInZoomControls = false
-                displayZoomControls = false
-                loadWithOverviewMode = true
-                useWideViewPort = true
-                cacheMode = WebSettings.LOAD_DEFAULT
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    private fun configureGeckoView() {
+        runtime = GeckoRuntime.create(
+            this,
+            GeckoRuntimeSettings.Builder()
+                .javaScriptEnabled(true)
+                .aboutConfigEnabled(false)
+                .build(),
+        )
+        session = GeckoSession().apply {
+            open(runtime)
+            navigationDelegate = object : GeckoSession.NavigationDelegate {
+                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                    canNavigateBack = canGoBack
+                }
             }
-
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                ): Boolean = false
-
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+            progressDelegate = object : GeckoSession.ProgressDelegate {
+                override fun onPageStart(session: GeckoSession, url: String) {
                     binding.progress.visibility = View.VISIBLE
                     binding.errorText.visibility = View.GONE
                 }
 
-                override fun onPageFinished(view: WebView?, url: String?) {
+                override fun onPageStop(session: GeckoSession, success: Boolean) {
                     binding.progress.visibility = View.GONE
-                }
-
-                override fun onReceivedError(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                    error: WebResourceError?,
-                ) {
-                    super.onReceivedError(view, request, error)
-                    if (request?.isForMainFrame == true) {
+                    if (!success) {
                         showError("Не удалось открыть адрес:\n$kioskUrl\n\nПроверьте сеть и доступность сервера.")
                     }
                 }
-
-                override fun onReceivedHttpError(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                    errorResponse: WebResourceResponse?,
-                ) {
-                    super.onReceivedHttpError(view, request, errorResponse)
-                    if (request?.isForMainFrame == true) {
-                        showError("Сервер вернул ошибку ${errorResponse?.statusCode ?: ""} для:\n$kioskUrl")
-                    }
-                }
-
-                override fun onReceivedSslError(
-                    view: WebView?,
-                    handler: SslErrorHandler,
-                    error: SslError,
-                ) {
-                    handler.cancel()
-                    showError("SSL ошибка при открытии:\n$kioskUrl")
-                }
             }
         }
+        binding.webView.setSession(session)
+    }
+
+    private fun loadKiosk() {
+        binding.progress.visibility = View.VISIBLE
+        binding.errorText.visibility = View.GONE
+        session.loadUri(kioskUrl)
     }
 
     private fun showError(message: String) {

@@ -1268,6 +1268,20 @@ function DoctorGrid({
 }) {
   const [query, setQuery] = useState('')
   const [specialtyFilter, setSpecialtyFilter] = useState('')
+  const [specialtyPickerOpen, setSpecialtyPickerOpen] = useState(false)
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
+
+  useEffect(() => {
+    const m = window.matchMedia('(pointer: coarse)')
+    const apply = () => setIsCoarsePointer(m.matches)
+    apply()
+    if (typeof m.addEventListener === 'function') {
+      m.addEventListener('change', apply)
+      return () => m.removeEventListener('change', apply)
+    }
+    m.addListener(apply)
+    return () => m.removeListener(apply)
+  }, [])
 
   if (!doctors.length) {
     return (
@@ -1283,6 +1297,7 @@ function DoctorGrid({
         .filter(Boolean),
     ),
   ).sort((a, b) => a.localeCompare(b, 'ru'))
+  const selectedSpecialtyTitle = specialtyFilter || 'Все направления'
 
   const filteredDoctors = doctors.filter((d) => {
     const fullName = (d.full_name ?? '').toLowerCase()
@@ -1316,14 +1331,54 @@ function DoctorGrid({
           </div>
         </div>
         <div className="doctor-filter-field">
-          <select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-            <option value="">Все направления</option>
-            {specialties.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          {isCoarsePointer ? (
+            <>
+              <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setSpecialtyPickerOpen(true)}>
+                {selectedSpecialtyTitle}
+              </button>
+              {specialtyPickerOpen && (
+                <div className="service-picker-modal" onClick={() => setSpecialtyPickerOpen(false)}>
+                  <div className="service-picker-card" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="service-picker-close" onClick={() => setSpecialtyPickerOpen(false)}>
+                      Закрыть
+                    </button>
+                    <button
+                      type="button"
+                      className={`service-picker-item ${specialtyFilter === '' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSpecialtyFilter('')
+                        setSpecialtyPickerOpen(false)
+                      }}
+                    >
+                      Все направления
+                    </button>
+                    {specialties.map((s) => (
+                      <button
+                        type="button"
+                        key={s}
+                        className={`service-picker-item ${specialtyFilter === s ? 'active' : ''}`}
+                        onClick={() => {
+                          setSpecialtyFilter(s)
+                          setSpecialtyPickerOpen(false)
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
+              <option value="">Все направления</option>
+              {specialties.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       {filteredDoctors.length === 0 && (
@@ -1335,10 +1390,17 @@ function DoctorGrid({
         {filteredDoctors.map((d) => (
           <article key={d.mis_id} className="doctor-card">
             <div className="doctor-card-info">
-              <div
-                className="doctor-card-photo"
-                style={doctorMedia[d.mis_id]?.photo_url ? { backgroundImage: `url(${doctorMedia[d.mis_id].photo_url})` } : undefined}
-              />
+              <div className="doctor-card-photo">
+                {doctorMedia[d.mis_id]?.photo_url && (
+                  <img
+                    src={doctorMedia[d.mis_id].photo_url}
+                    alt={d.full_name}
+                    className="doctor-card-photo-img"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                )}
+              </div>
               <div className="doctor-card-text">
                 {(doctorMedia[d.mis_id]
                   ? doctorMedia[d.mis_id].show_specialty === true

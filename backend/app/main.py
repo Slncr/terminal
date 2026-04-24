@@ -81,6 +81,14 @@ app.include_router(api_router, prefix="/api")
 app.mount("/media", StaticFiles(directory="/app/uploads"), name="media")
 
 
+@app.middleware("http")
+async def media_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/media/") and response.status_code < 400:
+        response.headers.setdefault("Cache-Control", "public, max-age=604800, immutable")
+    return response
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "clinic-terminal-api", "docs": "/docs"}
