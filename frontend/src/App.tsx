@@ -1334,7 +1334,7 @@ function DoctorGrid({
                 {d.specialty && <div className="doctor-card-specialty">{d.specialty}</div>}
                 <h2 className="doctor-card-name">{d.full_name}</h2>
                 {doctorMedia[d.mis_id]?.experience_label && (
-                  <div className="doctor-card-experience">Стаж работы: {doctorMedia[d.mis_id].experience_label}</div>
+                  <div className="doctor-card-experience">{doctorMedia[d.mis_id].experience_label}</div>
                 )}
                 {(doctorMedia[d.mis_id]?.badge1_label || doctorMedia[d.mis_id]?.badge2_label || doctorMedia[d.mis_id]?.badge3_label) && (
                   <div className="doctor-card-badges">
@@ -1584,7 +1584,7 @@ function DoctorSchedule({
         <div className="doctor-booking-content">
           {doctor.specialty && <div className="doctor-booking-specialty">{doctor.specialty}</div>}
           <h2 className="doctor-booking-name">{doctor.full_name}</h2>
-          {doctorMeta?.experience_label && <div className="doctor-booking-exp">Стаж работы: {doctorMeta.experience_label}</div>}
+          {doctorMeta?.experience_label && <div className="doctor-booking-exp">{doctorMeta.experience_label}</div>}
           {(doctorMeta?.badge1_label || doctorMeta?.badge2_label || doctorMeta?.badge3_label) && (
             <div className="doctor-booking-badges">
               {doctorMeta?.badge1_label && (
@@ -3204,7 +3204,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           <input placeholder="Имя" value={doctorName} onChange={(e) => setDoctorName(e.target.value)} />
           <input placeholder="Отчество" value={doctorPatronymic} onChange={(e) => setDoctorPatronymic(e.target.value)} />
           <input
-            placeholder="Стаж работы (например: 12 лет)"
+            placeholder="Серая приписка"
             value={doctorExperience}
             onChange={(e) => setDoctorExperience(e.target.value)}
           />
