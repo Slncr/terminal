@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   createAppointment,
   createAdminBanner,
@@ -356,7 +357,15 @@ export default function App() {
               onPickGroup={(groupTitle) => setView({ kind: 'checkup-group', groupTitle })}
             />
           ) : (
-            <div className="empty-hint">Раздел в разработке</div>
+            <>
+              <div className="doctors-page-head">
+                <button type="button" className="back-chip-btn" onClick={() => setView({ kind: 'home' })}>
+                  <span aria-hidden>←</span> Назад
+                </button>
+                <h2>Программы check-up</h2>
+              </div>
+              <div className="empty-hint">Раздел в разработке</div>
+            </>
           )
         )}
         {!loading && view.kind === 'checkup-group' && (
@@ -1331,7 +1340,10 @@ function DoctorGrid({
                 style={doctorMedia[d.mis_id]?.photo_url ? { backgroundImage: `url(${doctorMedia[d.mis_id].photo_url})` } : undefined}
               />
               <div className="doctor-card-text">
-                {d.specialty && <div className="doctor-card-specialty">{d.specialty}</div>}
+                {(doctorMedia[d.mis_id]
+                  ? doctorMedia[d.mis_id].show_specialty === true
+                  : true) &&
+                  d.specialty && <div className="doctor-card-specialty">{d.specialty}</div>}
                 <h2 className="doctor-card-name">{d.full_name}</h2>
                 {doctorMedia[d.mis_id]?.experience_label && (
                   <div className="doctor-card-experience">{doctorMedia[d.mis_id].experience_label}</div>
@@ -1454,7 +1466,6 @@ function DoctorSchedule({
   const [monthCursor, setMonthCursor] = useState(() => new Date(day.getFullYear(), day.getMonth(), 1))
   const [monthLoading, setMonthLoading] = useState(false)
   const [monthAvailability, setMonthAvailability] = useState<Record<string, boolean>>({})
-  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
   const todayStart = useMemo(() => startOfDay(new Date()), [])
   const todayKeyMoscow = useMemo(() => dateKeyMoscow(new Date()), [])
   const selectedServiceTitle = useMemo(() => {
@@ -1463,18 +1474,6 @@ function DoctorSchedule({
     if (!found) return 'Выбрать услугу'
     return `${found.name ?? found.mis_id}${found.price != null ? ` · ${found.price} ₽` : ''}`
   }, [pickedServiceId, services])
-
-  useEffect(() => {
-    const m = window.matchMedia('(pointer: coarse)')
-    const apply = () => setIsCoarsePointer(m.matches)
-    apply()
-    if (typeof m.addEventListener === 'function') {
-      m.addEventListener('change', apply)
-      return () => m.removeEventListener('change', apply)
-    }
-    m.addListener(apply)
-    return () => m.removeListener(apply)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1602,7 +1601,8 @@ function DoctorSchedule({
         </div>
 
         <div className="doctor-booking-content">
-          {doctor.specialty && <div className="doctor-booking-specialty">{doctor.specialty}</div>}
+          {(doctorMeta ? doctorMeta.show_specialty === true : true) &&
+            doctor.specialty && <div className="doctor-booking-specialty">{doctor.specialty}</div>}
           <h2 className="doctor-booking-name">{doctor.full_name}</h2>
           {doctorMeta?.experience_label && <div className="doctor-booking-exp">{doctorMeta.experience_label}</div>}
           {(doctorMeta?.badge1_label || doctorMeta?.badge2_label || doctorMeta?.badge3_label) && (
@@ -1620,19 +1620,29 @@ function DoctorSchedule({
           )}
 
           {services.length > 0 && (
-            <label className="doctor-service-label">
-              Записаться на приём
-              {isCoarsePointer ? (
-                <>
-                  <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setServicePickerOpen(true)}>
-                    {selectedServiceTitle}
-                  </button>
-                  {servicePickerOpen && (
-                    <div className="service-picker-modal" onClick={() => setServicePickerOpen(false)}>
-                      <div className="service-picker-card" onClick={(e) => e.stopPropagation()}>
+            <div className="doctor-service-label">
+              <span>Записаться на приём</span>
+              <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setServicePickerOpen(true)}>
+                {selectedServiceTitle}
+              </button>
+              {servicePickerOpen &&
+                createPortal(
+                  <div
+                    className="service-picker-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Выбор услуги"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) setServicePickerOpen(false)
+                    }}
+                  >
+                    <div className="service-picker-card">
+                      <div className="service-picker-card-head">
                         <button type="button" className="service-picker-close" onClick={() => setServicePickerOpen(false)}>
                           Закрыть
                         </button>
+                      </div>
+                      <div className="service-picker-scroll">
                         <button
                           type="button"
                           className={`service-picker-item ${pickedServiceId === '' ? 'active' : ''}`}
@@ -1659,20 +1669,10 @@ function DoctorSchedule({
                         ))}
                       </div>
                     </div>
-                  )}
-                </>
-              ) : (
-                <select className="doctor-service-select" value={pickedServiceId} onChange={(e) => setPickedServiceId(e.target.value)}>
-                  <option value="">Выбрать услугу</option>
-                  {services.map((s) => (
-                    <option key={s.mis_id} value={s.mis_id}>
-                      {s.name ?? s.mis_id}
-                      {s.price != null ? ` · ${s.price} ₽` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </label>
+                  </div>,
+                  document.body,
+                )}
+            </div>
           )}
 
           <div className="doctor-schedule-header">
@@ -1823,6 +1823,7 @@ function DoctorSchedule({
         <BookingModal
           doctor={doctor}
           doctorPhoto={doctorPhoto}
+          doctorMeta={doctorMeta}
           slot={picked}
           services={services}
           initialServiceId={pickedServiceId}
@@ -1837,6 +1838,7 @@ function DoctorSchedule({
 function BookingModal({
   doctor,
   doctorPhoto,
+  doctorMeta,
   slot,
   services,
   initialServiceId,
@@ -1845,6 +1847,7 @@ function BookingModal({
 }: {
   doctor: Employee
   doctorPhoto?: string
+  doctorMeta?: AdminDoctorMedia
   slot: DaySlot
   services: Service[]
   initialServiceId?: string
@@ -1962,7 +1965,9 @@ function BookingModal({
               <div>
                 <div>{doctor.surname}</div>
                 <div>{doctor.name} {doctor.patronymic}</div>
-                <div className="booking-doctor-spec">{doctor.specialty}</div>
+                {(doctorMeta ? doctorMeta.show_specialty === true : true) && doctor.specialty && (
+                  <div className="booking-doctor-spec">{doctor.specialty}</div>
+                )}
               </div>
             </div>
 
@@ -2103,6 +2108,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [doctorBadge2, setDoctorBadge2] = useState('')
   const [doctorBadge3, setDoctorBadge3] = useState('')
   const [doctorShowInSections, setDoctorShowInSections] = useState(true)
+  const [doctorShowSpecialty, setDoctorShowSpecialty] = useState(true)
   const [doctorSurname, setDoctorSurname] = useState('')
   const [doctorName, setDoctorName] = useState('')
   const [doctorPatronymic, setDoctorPatronymic] = useState('')
@@ -2258,6 +2264,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
       setDoctorBadge2('')
       setDoctorBadge3('')
       setDoctorShowInSections(true)
+      setDoctorShowSpecialty(true)
       setDoctorSurname('')
       setDoctorName('')
       setDoctorPatronymic('')
@@ -2271,6 +2278,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setDoctorBadge2(selected?.badge2_label ?? '')
     setDoctorBadge3(selected?.badge3_label ?? '')
     setDoctorShowInSections(selected?.show_in_sections !== false)
+    setDoctorShowSpecialty(selected?.show_specialty !== false)
     setDoctorSurname(doc?.surname ?? '')
     setDoctorName(doc?.name ?? '')
     setDoctorPatronymic(doc?.patronymic ?? '')
@@ -3280,6 +3288,14 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             />
             <span>Показывать в разделах по врачам</span>
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <input
+              type="checkbox"
+              checked={doctorShowSpecialty}
+              onChange={(e) => setDoctorShowSpecialty(e.target.checked)}
+            />
+            <span>Показывать специализацию</span>
+          </label>
           <input
             type="file"
             accept="image/*"
@@ -3294,15 +3310,13 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             className="btn-primary"
             onClick={async () => {
               if (!doctorId) return
-              if (!doctorSurname.trim() || !doctorName.trim()) {
-                setStatus('Для ФИО заполните фамилию и имя')
-                return
+              if (doctorSurname.trim() || doctorName.trim() || doctorPatronymic.trim()) {
+                await updateAdminDoctorName(doctorId, {
+                  surname: doctorSurname.trim(),
+                  name: doctorName.trim(),
+                  patronymic: doctorPatronymic.trim() || null,
+                })
               }
-              await updateAdminDoctorName(doctorId, {
-                surname: doctorSurname.trim(),
-                name: doctorName.trim(),
-                patronymic: doctorPatronymic.trim() || null,
-              })
               await upsertAdminDoctorMedia({
                 employee_mis_id: doctorId,
                 photo_url: doctorPhoto,
@@ -3311,8 +3325,9 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 badge2_label: doctorBadge2.trim() || null,
                 badge3_label: doctorBadge3.trim() || null,
                 show_in_sections: doctorShowInSections,
+                show_specialty: doctorShowSpecialty,
               })
-              setStatus('ФИО и данные врача сохранены')
+              setStatus('Данные врача сохранены')
               await reload()
             }}
           >
@@ -3331,6 +3346,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                   {m.badge2_label && <div className="meta">Приписка 2: {m.badge2_label}</div>}
                   {m.badge3_label && <div className="meta">Приписка 3: {m.badge3_label}</div>}
                   <div className="meta">В разделах по врачам: {m.show_in_sections === false ? 'скрыт' : 'показан'}</div>
+                  <div className="meta">Специализация: {m.show_specialty === false ? 'скрыта' : 'показана'}</div>
                 </div>
                 <button
                   type="button"

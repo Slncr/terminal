@@ -914,30 +914,53 @@ main {
   inset: 0;
   background: rgba(16, 24, 40, 0.45);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  z-index: 1200;
+  z-index: 5000;
+  padding: 1rem;
+  box-sizing: border-box;
+  touch-action: manipulation;
 }
 
 .service-picker-card {
-  width: min(920px, calc(100vw - 24px));
-  max-height: min(78vh, 620px);
-  overflow: auto;
-  border-radius: 16px 16px 0 0;
+  width: min(920px, calc(100vw - 2rem));
+  max-height: min(85vh, 700px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
   background: #ffffff;
-  padding: 0.75rem;
-  display: grid;
+  box-shadow: 0 20px 60px rgba(16, 24, 40, 0.18);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.service-picker-card-head {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.65rem 0.75rem 0.25rem;
+}
+
+.service-picker-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0.1rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
   gap: 0.35rem;
 }
 
 .service-picker-close {
-  justify-self: end;
   border-radius: 999px;
   border: 1px solid #0094f5;
   background: #fff;
   color: #0094f5;
   padding: 0.35rem 0.75rem;
   font-weight: 500;
+  cursor: pointer;
 }
 
 .service-picker-item {
@@ -949,6 +972,9 @@ main {
   color: #1d2622;
   padding: 0.65rem 0.75rem;
   font-size: 0.96rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .service-picker-item.active {
