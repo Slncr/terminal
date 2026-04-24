@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
+from PIL import Image
 
 from app.database import get_db
 from app.models import CheckupGroupTile, CheckupItem, ConsumerDocument, DoctorMedia, Employee, FeatureFlag, HomeTile, PromoBanner
@@ -30,17 +32,35 @@ from app.schemas import (
 router = APIRouter()
 
 MEDIA_ROOT = Path("/app/uploads")
+MAX_IMAGE_DIMENSION = 1920
 
 
 def _save_upload(file: UploadFile, folder: str) -> str:
     ext = Path(file.filename or "").suffix.lower() or ".bin"
-    name = f"{uuid.uuid4().hex}{ext}"
+    image_exts = {".jpg", ".jpeg", ".png", ".webp"}
+    content = file.file.read()
+    out_ext = ext
+    if ext in image_exts:
+        try:
+            content, out_ext = _optimize_image(content)
+        except Exception:
+            out_ext = ext
+    name = f"{uuid.uuid4().hex}{out_ext}"
     target_dir = MEDIA_ROOT / folder
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / name
     with target.open("wb") as f:
-        f.write(file.file.read())
+        f.write(content)
     return f"/media/{folder}/{name}"
+
+
+def _optimize_image(raw: bytes) -> tuple[bytes, str]:
+    with Image.open(BytesIO(raw)) as img:
+        src = img.convert("RGBA")
+        src.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
+        out = BytesIO()
+        src.save(out, format="WEBP", quality=82, method=6)
+        return out.getvalue(), ".webp"
 
 
 @router.post("/upload")

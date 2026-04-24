@@ -1448,13 +1448,33 @@ function DoctorSchedule({
   const [selectedSlot, setSelectedSlot] = useState<DaySlot | null>(null)
   const [picked, setPicked] = useState<DaySlot | null>(null)
   const [pickedServiceId, setPickedServiceId] = useState('')
+  const [servicePickerOpen, setServicePickerOpen] = useState(false)
   const [period, setPeriod] = useState<'week' | 'month'>('week')
   const [monthOpen, setMonthOpen] = useState(false)
   const [monthCursor, setMonthCursor] = useState(() => new Date(day.getFullYear(), day.getMonth(), 1))
   const [monthLoading, setMonthLoading] = useState(false)
   const [monthAvailability, setMonthAvailability] = useState<Record<string, boolean>>({})
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
   const todayStart = useMemo(() => startOfDay(new Date()), [])
   const todayKeyMoscow = useMemo(() => dateKeyMoscow(new Date()), [])
+  const selectedServiceTitle = useMemo(() => {
+    if (!pickedServiceId) return 'Выбрать услугу'
+    const found = services.find((s) => s.mis_id === pickedServiceId)
+    if (!found) return 'Выбрать услугу'
+    return `${found.name ?? found.mis_id}${found.price != null ? ` · ${found.price} ₽` : ''}`
+  }, [pickedServiceId, services])
+
+  useEffect(() => {
+    const m = window.matchMedia('(pointer: coarse)')
+    const apply = () => setIsCoarsePointer(m.matches)
+    apply()
+    if (typeof m.addEventListener === 'function') {
+      m.addEventListener('change', apply)
+      return () => m.removeEventListener('change', apply)
+    }
+    m.addListener(apply)
+    return () => m.removeListener(apply)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1602,15 +1622,56 @@ function DoctorSchedule({
           {services.length > 0 && (
             <label className="doctor-service-label">
               Записаться на приём
-              <select className="doctor-service-select" value={pickedServiceId} onChange={(e) => setPickedServiceId(e.target.value)}>
-                <option value="">Выбрать услугу</option>
-                {services.map((s) => (
-                  <option key={s.mis_id} value={s.mis_id}>
-                    {s.name ?? s.mis_id}
-                    {s.price != null ? ` · ${s.price} ₽` : ''}
-                  </option>
-                ))}
-              </select>
+              {isCoarsePointer ? (
+                <>
+                  <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setServicePickerOpen(true)}>
+                    {selectedServiceTitle}
+                  </button>
+                  {servicePickerOpen && (
+                    <div className="service-picker-modal" onClick={() => setServicePickerOpen(false)}>
+                      <div className="service-picker-card" onClick={(e) => e.stopPropagation()}>
+                        <button type="button" className="service-picker-close" onClick={() => setServicePickerOpen(false)}>
+                          Закрыть
+                        </button>
+                        <button
+                          type="button"
+                          className={`service-picker-item ${pickedServiceId === '' ? 'active' : ''}`}
+                          onClick={() => {
+                            setPickedServiceId('')
+                            setServicePickerOpen(false)
+                          }}
+                        >
+                          Выбрать услугу
+                        </button>
+                        {services.map((s) => (
+                          <button
+                            type="button"
+                            key={s.mis_id}
+                            className={`service-picker-item ${pickedServiceId === s.mis_id ? 'active' : ''}`}
+                            onClick={() => {
+                              setPickedServiceId(s.mis_id)
+                              setServicePickerOpen(false)
+                            }}
+                          >
+                            {s.name ?? s.mis_id}
+                            {s.price != null ? ` · ${s.price} ₽` : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <select className="doctor-service-select" value={pickedServiceId} onChange={(e) => setPickedServiceId(e.target.value)}>
+                  <option value="">Выбрать услугу</option>
+                  {services.map((s) => (
+                    <option key={s.mis_id} value={s.mis_id}>
+                      {s.name ?? s.mis_id}
+                      {s.price != null ? ` · ${s.price} ₽` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
           )}
 
