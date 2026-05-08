@@ -84,6 +84,19 @@ def find_ticket_items(data: Any) -> list[dict[str, Any]]:
     return find_schedule_items(data)
 
 
+def find_clinic_list(data: Any) -> list[dict[str, Any]]:
+    root = data if isinstance(data, dict) else {}
+    inner = _unwrap_response(root)
+    for container in (inner, root):
+        for key in ("Клиника", "Клиники", "Clinics", "Clinic"):
+            val = container.get(key)
+            if isinstance(val, list):
+                return [x for x in val if isinstance(x, dict)]
+            if isinstance(val, dict):
+                return [val]
+    return []
+
+
 def _get_first(d: dict[str, Any], keys: tuple[str, ...]) -> Any:
     for k in keys:
         if k in d and d[k] not in (None, ""):

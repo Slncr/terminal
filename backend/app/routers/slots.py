@@ -31,6 +31,7 @@ def _overlaps(a0: datetime, a1: datetime, b0: datetime, b1: datetime) -> bool:
 def free_slots_for_doctor(
     employee_mis_id: str,
     day: datetime = Query(..., description="ISO date-time (any time on that day)"),
+    clinic_mis_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[FreeSlotOut]:
     emp = db.get(Employee, employee_mis_id)
@@ -38,13 +39,15 @@ def free_slots_for_doctor(
         raise HTTPException(status_code=404, detail="Врач не найден")
     day_start, day_end = _day_bounds(day)
 
-    schedules = db.scalars(
-        select(ScheduleSlot).where(
-            ScheduleSlot.employee_mis_id == employee_mis_id,
-            ScheduleSlot.slot_start >= day_start,
-            ScheduleSlot.slot_start < day_end,
-        )
-    ).all()
+    q = select(ScheduleSlot).where(
+        ScheduleSlot.employee_mis_id == employee_mis_id,
+        ScheduleSlot.slot_start >= day_start,
+        ScheduleSlot.slot_start < day_end,
+    )
+    cid = (clinic_mis_id or "").strip()
+    if cid:
+        q = q.where(ScheduleSlot.clinic_mis_id == cid)
+    schedules = db.scalars(q).all()
 
     occupied = db.scalars(
         select(OccupiedSlot).where(
@@ -54,17 +57,18 @@ def free_slots_for_doctor(
         )
     ).all()
 
-    terminal = db.scalars(
-        select(TerminalAppointment).where(
-            TerminalAppointment.employee_mis_id == employee_mis_id,
-            TerminalAppointment.status.in_(("pending", "confirmed", "created", "success")),
-            TerminalAppointment.slot_start < day_end,
-            or_(
-                TerminalAppointment.slot_end.is_(None),
-                TerminalAppointment.slot_end > day_start,
-            ),
-        )
-    ).all()
+    tq = select(TerminalAppointment).where(
+        TerminalAppointment.employee_mis_id == employee_mis_id,
+        TerminalAppointment.status.in_(("pending", "confirmed", "created", "success")),
+        TerminalAppointment.slot_start < day_end,
+        or_(
+            TerminalAppointment.slot_end.is_(None),
+            TerminalAppointment.slot_end > day_start,
+        ),
+    )
+    if cid:
+        tq = tq.where(TerminalAppointment.clinic_mis_id == cid)
+    terminal = db.scalars(tq).all()
 
     free: list[FreeSlotOut] = []
     for s in schedules:
@@ -97,6 +101,7 @@ def free_slots_for_doctor(
 def day_slots_for_doctor(
     employee_mis_id: str,
     day: datetime = Query(..., description="ISO date-time (any time on that day)"),
+    clinic_mis_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[DaySlotOut]:
     emp = db.get(Employee, employee_mis_id)
@@ -104,13 +109,15 @@ def day_slots_for_doctor(
         raise HTTPException(status_code=404, detail="Врач не найден")
     day_start, day_end = _day_bounds(day)
 
-    schedules = db.scalars(
-        select(ScheduleSlot).where(
-            ScheduleSlot.employee_mis_id == employee_mis_id,
-            ScheduleSlot.slot_start >= day_start,
-            ScheduleSlot.slot_start < day_end,
-        )
-    ).all()
+    q = select(ScheduleSlot).where(
+        ScheduleSlot.employee_mis_id == employee_mis_id,
+        ScheduleSlot.slot_start >= day_start,
+        ScheduleSlot.slot_start < day_end,
+    )
+    cid = (clinic_mis_id or "").strip()
+    if cid:
+        q = q.where(ScheduleSlot.clinic_mis_id == cid)
+    schedules = db.scalars(q).all()
 
     occupied = db.scalars(
         select(OccupiedSlot).where(
@@ -125,21 +132,24 @@ def day_slots_for_doctor(
         for s in db.scalars(select(Service).where(Service.mis_id.in_(service_ids))).all():
             service_map[s.mis_id] = s.name or s.mis_id
 
-    terminal = db.scalars(
-        select(TerminalAppointment).where(
-            TerminalAppointment.employee_mis_id == employee_mis_id,
-            TerminalAppointment.status.in_(("pending", "confirmed", "created", "success")),
-            TerminalAppointment.slot_start < day_end,
-            or_(
-                TerminalAppointment.slot_end.is_(None),
-                TerminalAppointment.slot_end > day_start,
-            ),
-        )
-    ).all()
+    tq = select(TerminalAppointment).where(
+        TerminalAppointment.employee_mis_id == employee_mis_id,
+        TerminalAppointment.status.in_(("pending", "confirmed", "created", "success")),
+        TerminalAppointment.slot_start < day_end,
+        or_(
+            TerminalAppointment.slot_end.is_(None),
+            TerminalAppointment.slot_end > day_start,
+        ),
+    )
+    if cid:
+        tq = tq.where(TerminalAppointment.clinic_mis_id == cid)
+    terminal = db.scalars(tq).all()
 
     out: list[DaySlotOut] = []
+    covered: list[tuple[datetime, datetime]] = []
     for s in schedules:
         end = s.slot_end
+        covered.append((s.slot_start, end))
         busy_service_id: str | None = None
         busy = False
         for o in occupied:
@@ -163,5 +173,35 @@ def day_slots_for_doctor(
                 service_name=service_map.get(busy_service_id) if busy_service_id else None,
             )
         )
+
+    # Safety net: if schedule frame is incomplete, still expose occupied ranges
+    # as busy slots so UI does not show "all free" for actually booked periods.
+    for o in occupied:
+        if not any(_overlaps(o.slot_start, o.slot_end, a0, a1) for a0, a1 in covered):
+            out.append(
+                DaySlotOut(
+                    start=o.slot_start,
+                    end=o.slot_end,
+                    clinic_mis_id=cid or None,
+                    status="busy",
+                    service_mis_id=o.service_mis_id,
+                    service_name=service_map.get(o.service_mis_id) if o.service_mis_id else None,
+                )
+            )
+            covered.append((o.slot_start, o.slot_end))
+    for t in terminal:
+        te = t.slot_end or (t.slot_start + timedelta(minutes=30))
+        if not any(_overlaps(t.slot_start, te, a0, a1) for a0, a1 in covered):
+            out.append(
+                DaySlotOut(
+                    start=t.slot_start,
+                    end=te,
+                    clinic_mis_id=t.clinic_mis_id,
+                    status="busy",
+                    service_mis_id=t.service_mis_id,
+                    service_name=None,
+                )
+            )
+            covered.append((t.slot_start, te))
     out.sort(key=lambda x: x.start)
     return out

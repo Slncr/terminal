@@ -20,6 +20,11 @@ class EmployeeOut(BaseModel):
         return " ".join(p for p in parts if p).strip() or self.mis_id
 
 
+class BranchOut(BaseModel):
+    mis_id: str
+    title: str
+
+
 class FreeSlotOut(BaseModel):
     start: datetime
     end: datetime

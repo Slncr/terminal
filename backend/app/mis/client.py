@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -63,8 +65,23 @@ def format_time_begin(d: datetime) -> str:
 
 
 class MisClient:
+    _MAX_RPS = 20
+    _MIN_INTERVAL_SEC = 1.0 / _MAX_RPS
+    _rate_lock = asyncio.Lock()
+    _next_allowed_at = 0.0
+
     def __init__(self, timeout: float = 60.0) -> None:
         self._timeout = timeout
+
+    @classmethod
+    async def _throttle_rps(cls) -> None:
+        # Global process-level limiter: enforce at least 50ms between requests.
+        async with cls._rate_lock:
+            now = time.monotonic()
+            if now < cls._next_allowed_at:
+                await asyncio.sleep(cls._next_allowed_at - now)
+                now = time.monotonic()
+            cls._next_allowed_at = now + cls._MIN_INTERVAL_SEC
 
     @staticmethod
     def _schedule_urls() -> list[str]:
@@ -120,6 +137,7 @@ class MisClient:
                     payload = {**_base_auth_body(), **body}
                     if method_name:
                         logger.info("MIS POST %s method=%s", url, method_name)
+                    await self._throttle_rps()
                     r = await client.post(url, json=payload, headers=_headers(), auth=_auth())
                     r.raise_for_status()
                     data = self._normalize_payload(r.json())
@@ -167,6 +185,12 @@ class MisClient:
         body = {
             "Method": "GetListEmployees",
             "MainOnly": settings.mis_main_only,
+        }
+        return await self._post_first_ok(self._dictionary_urls(), body)
+
+    async def list_clinics(self) -> dict[str, Any]:
+        body = {
+            "Method": "GetListClinic",
         }
         return await self._post_first_ok(self._dictionary_urls(), body)
 

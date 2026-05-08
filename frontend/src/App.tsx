@@ -15,6 +15,8 @@ import {
   updateAdminDoctorName,
   deleteAdminTile,
   fetchDaySlots,
+  fetchBranches,
+  fetchDoctorBranches,
   fetchFreeSlots,
   fetchDoctorServices,
   fetchDoctors,
@@ -39,6 +41,7 @@ import {
   type AdminDocument,
   type AdminCheckupItem,
   type AdminTile,
+  type Branch,
   type DaySlot,
   type Employee,
   type Service,
@@ -62,11 +65,21 @@ type TileImageMeta = {
   scale: number
 }
 
+type DoctorsView = {
+  kind: 'doctors'
+  title: string
+  doctors: Employee[]
+  initialBranchId?: string
+  initialSpecialty?: string
+  initialQuery?: string
+  filterDoctorIds?: string[]
+}
+
 type MainView =
   | { kind: 'home' }
   | { kind: 'consumer' }
-  | { kind: 'doctors'; title: string; doctors: Employee[] }
-  | { kind: 'doctor'; doctor: Employee }
+  | DoctorsView
+  | { kind: 'doctor'; doctor: Employee; branchId?: string; backTo: 'home' | DoctorsView }
   | { kind: 'promos' }
   | { kind: 'promo'; banner: AdminBanner }
   | { kind: 'checkups' }
@@ -97,6 +110,7 @@ const FIXED_TILE_PRESETS: FixedTilePreset[] = [
   { key: 'small-ct', title: 'КТ', tile_type: 'specialty', size: 'small', sort_order: -994, specialty_filters: 'кт,компьютерн' },
   { key: 'small-us', title: 'УЗИ', tile_type: 'specialty', size: 'small', sort_order: -993, specialty_filters: 'узи,ультразвук' },
 ]
+const DEFAULT_BRANCH_TITLE_NEEDLE = 'социалист'
 
 function formatDayRu(d: Date): string {
   return d.toLocaleDateString('ru-RU', {
@@ -105,6 +119,12 @@ function formatDayRu(d: Date): string {
     month: 'long',
     year: 'numeric',
   })
+}
+
+function pickDefaultBranchId(branches: Branch[]): string {
+  if (!branches.length) return ''
+  const preferred = branches.find((b) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(DEFAULT_BRANCH_TITLE_NEEDLE))
+  return preferred?.mis_id ?? branches[0].mis_id
 }
 
 function dateKeyMoscow(d: Date): string {
@@ -237,6 +257,9 @@ export default function App() {
   const isAdminMode = window.location.pathname.startsWith('/admin')
   const lastSyncSeenRef = useRef<string | null>(null)
   const [view, setView] = useState<MainView>({ kind: 'home' })
+  const [pagePhase, setPagePhase] = useState<'in' | 'out'>('in')
+  const pageTransitionTimerRef = useRef<number | null>(null)
+  const pageTransitionTokenRef = useRef(0)
   const [doctors, setDoctors] = useState<Employee[]>([])
   const [sync, setSync] = useState<SyncStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -312,13 +335,39 @@ export default function App() {
     [doctors, doctorMedia],
   )
 
+  const navigate = useCallback((next: MainView) => {
+    const token = ++pageTransitionTokenRef.current
+    setPagePhase('out')
+    if (pageTransitionTimerRef.current != null) {
+      window.clearTimeout(pageTransitionTimerRef.current)
+    }
+    const minDelayMs = next.kind === 'doctor' ? 360 : 260
+    const minDelay = new Promise<void>((resolve) => {
+      pageTransitionTimerRef.current = window.setTimeout(resolve, minDelayMs)
+    })
+    minDelay.then(() => {
+      if (token !== pageTransitionTokenRef.current) return
+      setView(next)
+      requestAnimationFrame(() => setPagePhase('in'))
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (pageTransitionTimerRef.current != null) {
+        window.clearTimeout(pageTransitionTimerRef.current)
+      }
+    },
+    [],
+  )
+
   if (isAdminMode) {
     return <AdminPanel doctors={doctors} syncLabel={syncLabel} />
   }
 
   return (
     <div className="app-shell">
-      <main>
+      <main className={`${view.kind === 'home' ? 'main-home ' : ''}page-transition page-transition-${pagePhase}`}>
         {loadError && (
           <div className="empty-hint" style={{ marginBottom: '1rem', color: 'var(--danger)' }}>
             {loadError}
@@ -329,37 +378,44 @@ export default function App() {
           <HomeTiles
             doctors={sectionVisibleDoctors}
             doctorMedia={doctorMedia}
-            onOpenConsumer={() => setView({ kind: 'consumer' })}
-            onOpenDoctors={() => setView({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
-            onOpenGroup={(title, doctorsInGroup) => setView({ kind: 'doctors', title, doctors: doctorsInGroup })}
-            onOpenDoctor={(doctor) => setView({ kind: 'doctor', doctor })}
-            onOpenPromos={() => setView({ kind: 'promos' })}
-            onOpenCheckups={() => setView({ kind: 'checkups' })}
+            onOpenConsumer={() => navigate({ kind: 'consumer' })}
+            onOpenDoctors={() => navigate({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
+            onOpenGroup={(title, doctorsInGroup) =>
+              navigate({
+                kind: 'doctors',
+                title,
+                doctors: doctorsInGroup,
+                filterDoctorIds: doctorsInGroup.map((d) => d.mis_id),
+              })
+            }
+            onOpenDoctor={(doctor) => navigate({ kind: 'doctor', doctor, backTo: 'home' })}
+            onOpenPromos={() => navigate({ kind: 'promos' })}
+            onOpenCheckups={() => navigate({ kind: 'checkups' })}
             tiles={tiles}
             banners={banners}
           />
         )}
         {!loading && view.kind === 'consumer' && (
-          <ConsumerCornerScreen documents={documents} onBack={() => setView({ kind: 'home' })} />
+          <ConsumerCornerScreen documents={documents} onBack={() => navigate({ kind: 'home' })} />
         )}
         {!loading && view.kind === 'promos' && (
-          <PromoGrid banners={banners} onBack={() => setView({ kind: 'home' })} onPick={(b) => setView({ kind: 'promo', banner: b })} />
+          <PromoGrid banners={banners} onBack={() => navigate({ kind: 'home' })} onPick={(b) => navigate({ kind: 'promo', banner: b })} />
         )}
         {!loading && view.kind === 'promo' && (
-          <PromoDetails banner={view.banner} onBack={() => setView({ kind: 'promos' })} />
+          <PromoDetails banner={view.banner} onBack={() => navigate({ kind: 'promos' })} />
         )}
         {!loading && view.kind === 'checkups' && (
           checkupsEnabled ? (
             <CheckupGroups
               items={checkups}
               groupTiles={checkupGroups}
-              onBack={() => setView({ kind: 'home' })}
-              onPickGroup={(groupTitle) => setView({ kind: 'checkup-group', groupTitle })}
+              onBack={() => navigate({ kind: 'home' })}
+              onPickGroup={(groupTitle) => navigate({ kind: 'checkup-group', groupTitle })}
             />
           ) : (
             <>
               <div className="doctors-page-head">
-                <button type="button" className="back-chip-btn" onClick={() => setView({ kind: 'home' })}>
+                <button type="button" className="back-chip-btn" onClick={() => navigate({ kind: 'home' })}>
                   <span aria-hidden>←</span> Назад
                 </button>
                 <h2>Программы check-up</h2>
@@ -372,8 +428,8 @@ export default function App() {
           <CheckupGrid
             title={view.groupTitle}
             items={checkups.filter((x) => normalizeCheckupCategory(displayCheckupCategory(x.group_title)) === normalizeCheckupCategory(view.groupTitle))}
-            onBack={() => setView({ kind: 'checkups' })}
-            onPick={(item) => setView({ kind: 'checkup', item })}
+            onBack={() => navigate({ kind: 'checkups' })}
+            onPick={(item) => navigate({ kind: 'checkup', item })}
           />
         )}
         {!loading && view.kind === 'checkup' && (
@@ -382,7 +438,7 @@ export default function App() {
             onBack={() => {
               const fallback = displayCheckupCategory(view.item.group_title)
               const linked = checkupGroups.find((g) => normalizeCheckupCategory(g.title) === normalizeCheckupCategory(fallback))
-              setView({ kind: 'checkup-group', groupTitle: linked?.title || fallback })
+              navigate({ kind: 'checkup-group', groupTitle: linked?.title || fallback })
             }}
           />
         )}
@@ -390,19 +446,39 @@ export default function App() {
           <DoctorGrid
             doctors={view.doctors}
             doctorMedia={doctorMedia}
-            onBack={() => setView({ kind: 'home' })}
-            onPick={(d) => setView({ kind: 'doctor', doctor: d })}
+            initialBranchId={view.initialBranchId}
+            initialSpecialty={view.initialSpecialty}
+            initialQuery={view.initialQuery}
+            filterDoctorIds={view.filterDoctorIds}
+            onBack={() => navigate({ kind: 'home' })}
+            onPick={(d, ctx) =>
+              navigate({
+                kind: 'doctor',
+                doctor: d,
+                branchId: ctx.branchId,
+                backTo: {
+                  kind: 'doctors',
+                  title: view.title,
+                  doctors: view.doctors,
+                  initialBranchId: ctx.branchId,
+                  initialSpecialty: ctx.specialtyFilter,
+                  initialQuery: ctx.query,
+                  filterDoctorIds: view.filterDoctorIds,
+                },
+              })
+            }
           />
         )}
         {!loading && view.kind === 'doctor' && (
           <DoctorSchedule
             doctor={view.doctor}
+            clinicMisId={view.branchId}
             doctorPhoto={doctorMedia[view.doctor.mis_id]?.photo_url}
             doctorMeta={doctorMedia[view.doctor.mis_id]}
-            onBack={() => setView({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
+            onBack={() => navigate(view.backTo === 'home' ? { kind: 'home' } : view.backTo)}
             onBooked={() => {
               void refreshMeta()
-              setView({ kind: 'home' })
+              navigate({ kind: 'home' })
             }}
           />
         )}
@@ -434,17 +510,8 @@ function HomeTiles({
   tiles: AdminTile[]
   banners: AdminBanner[]
 }) {
-  const consumerCornerEnabled = true
+  const consumerCornerEnabled = false
   const [promoIndex, setPromoIndex] = useState(0)
-  const specialtyGroups = useMemo(() => {
-    const unique = new Set<string>()
-    for (const d of doctors) {
-      const s = (d.specialty ?? '').trim()
-      if (s) unique.add(s)
-    }
-    return Array.from(unique).slice(0, 8)
-  }, [doctors])
-
   const doctorsForAny = useCallback(
     (needles: string[]) => {
       const qs = needles.map((x) => x.trim().toLowerCase()).filter(Boolean)
@@ -644,6 +711,35 @@ function HomeTiles({
     () => mergeTilesByTitle(defaultSideTiles, parsedTiles?.side ?? []),
     [defaultSideTiles, mergeTilesByTitle, parsedTiles?.side],
   )
+  const specialistSmallTiles = useMemo(
+    () =>
+      smallTiles
+        .filter((t) => !['мрт', 'кт', 'рентген', 'узи'].some((x) => t.title.toLowerCase().includes(x)))
+        .slice(0, 4),
+    [smallTiles],
+  )
+  const diagnosticSmallTiles = useMemo(() => {
+    const preferred = ['мрт', 'кт', 'рентген', 'узи']
+    const picked: AdminTile[] = []
+    for (const key of preferred) {
+      const hit = smallTiles.find((t) => t.title.toLowerCase().includes(key))
+      if (hit && !picked.some((x) => x.id === hit.id)) picked.push(hit)
+    }
+    if (picked.length < 4) {
+      for (const t of smallTiles) {
+        if (picked.some((x) => x.id === t.id)) continue
+        if (['мрт', 'кт', 'рентген', 'узи'].some((x) => t.title.toLowerCase().includes(x))) {
+          picked.push(t)
+          if (picked.length >= 4) break
+        }
+      }
+    }
+    return picked
+  }, [smallTiles])
+  const homeSideTiles = useMemo(
+    () => sideTiles.filter((t) => !t.title.toLowerCase().includes('акци')),
+    [sideTiles],
+  )
 
   const openByFilters = useCallback(
     (title: string, filters: string | null, directSingle: boolean = false) => {
@@ -734,6 +830,8 @@ function HomeTiles({
 
   return (
     <section className="home-layout">
+      <div className="home-bg-orb home-bg-orb-blue" aria-hidden />
+      <div className="home-bg-orb home-bg-orb-orange" aria-hidden />
       {consumerCornerEnabled && (
         <button type="button" className="consumer-btn" onClick={onOpenConsumer}>
           Уголок потребителя
@@ -744,7 +842,11 @@ function HomeTiles({
         <div className="logo-mark">
           <img src="/logo.svg" alt="Евродон" className="logo-mark-img" decoding="async" />
         </div>
-        <h1>Добро пожаловать</h1>
+        <div className="home-status-pill">
+          <span className="home-status-dot" />
+          Клиника открыта
+          <strong>{new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })}</strong>
+        </div>
       </div>
 
       <div className="home-grid">
@@ -753,6 +855,9 @@ function HomeTiles({
             {mainTiles.slice(0, 2).map((t) => (
               (() => {
                 const image = getTileImageMeta(t)
+                const chips = t.title.toLowerCase().includes('инструмент')
+                  ? diagnosticSmallTiles
+                  : specialistSmallTiles
                 return (
               <button
                 key={t.id}
@@ -774,35 +879,33 @@ function HomeTiles({
                 )}
                 {renderTileTitle(t.title, true)}
                 <span className="tile-more">Подробнее</span>
+                {chips.length > 0 && (
+                  <div className="main-inline-chips">
+                    {chips.map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        className="main-inline-chip"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openByFilters(chip.title, chip.specialty_filters, true)
+                        }}
+                      >
+                        {chip.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </button>
                 )
               })()
             ))}
           </div>
-          <div className="specialties-grid home-left-small-scroll scroll-beauty">
-            {smallTiles.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`home-tile home-tile-small ${getTileClassName(t, 'small')}`}
-                onClick={() => {
-                  const diagnosticFast = ['мрт', 'кт', 'рентген'].some((x) => t.title.toLowerCase().includes(x))
-                  openByFilters(t.title, t.specialty_filters, diagnosticFast)
-                }}
-              >
-                {renderTileTitle(t.title, false)}
-                <span className="tile-more">Подробнее</span>
-              </button>
-            ))}
-            {specialtyGroups.length === 0 && (
-              <div className="home-tile home-tile-small">Нет данных по специализациям</div>
-            )}
-          </div>
         </div>
 
         <div className="home-right">
           <div className="home-right-scroll scroll-beauty">
-            {sideTiles.map((t) => (
+            {homeSideTiles.map((t) => (
               (() => {
                 const image = getTileImageMeta(t)
                 const isActionsShuffling = t.title.toLowerCase().includes('акци') && banners.length > 0
@@ -1258,54 +1361,113 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
 function DoctorGrid({
   doctors,
   doctorMedia,
+  initialBranchId,
+  initialSpecialty,
+  initialQuery,
+  filterDoctorIds,
   onBack,
   onPick,
 }: {
   doctors: Employee[]
   doctorMedia: Record<string, AdminDoctorMedia>
+  initialBranchId?: string
+  initialSpecialty?: string
+  initialQuery?: string
+  filterDoctorIds?: string[]
   onBack: () => void
-  onPick: (d: Employee) => void
+  onPick: (d: Employee, ctx: { branchId?: string; specialtyFilter?: string; query?: string }) => void
 }) {
-  const [query, setQuery] = useState('')
-  const [specialtyFilter, setSpecialtyFilter] = useState('')
+  const constrainedDoctorIds = useMemo(() => new Set(filterDoctorIds ?? []), [filterDoctorIds])
+  const applyConstraint = useCallback(
+    (rows: Employee[]) =>
+      constrainedDoctorIds.size
+        ? rows.filter((d) => constrainedDoctorIds.has(d.mis_id))
+        : rows,
+    [constrainedDoctorIds],
+  )
+  const [doctorRows, setDoctorRows] = useState<Employee[]>(doctors)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [branchFilter, setBranchFilter] = useState(initialBranchId ?? '')
+  const [query, setQuery] = useState(initialQuery ?? '')
+  const [specialtyFilter, setSpecialtyFilter] = useState(initialSpecialty ?? '')
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false)
   const [specialtyPickerOpen, setSpecialtyPickerOpen] = useState(false)
-  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
+  const [isGridBootstrapping, setIsGridBootstrapping] = useState(true)
 
   useEffect(() => {
-    const m = window.matchMedia('(pointer: coarse)')
-    const apply = () => setIsCoarsePointer(m.matches)
-    apply()
-    if (typeof m.addEventListener === 'function') {
-      m.addEventListener('change', apply)
-      return () => m.removeEventListener('change', apply)
+    setDoctorRows(applyConstraint(doctors))
+  }, [applyConstraint, doctors])
+
+  useEffect(() => {
+    let cancelled = false
+    let revealTimer: ReturnType<typeof setTimeout> | undefined
+    fetchBranches()
+      .then((rows) => {
+        if (cancelled) return
+        setBranches(rows)
+        const defaultId = initialBranchId && rows.some((x) => x.mis_id === initialBranchId) ? initialBranchId : pickDefaultBranchId(rows)
+        setBranchFilter(defaultId)
+        fetchDoctors(defaultId || undefined)
+          .then((docs) => {
+            if (!cancelled) setDoctorRows(applyConstraint(docs))
+          })
+          .catch(() => {
+            if (!cancelled) setDoctorRows([])
+          })
+          .finally(() => {
+            if (cancelled) return
+            revealTimer = setTimeout(() => {
+              if (!cancelled) setIsGridBootstrapping(false)
+            }, 340)
+          })
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([])
+        if (!cancelled) {
+          revealTimer = setTimeout(() => {
+            if (!cancelled) setIsGridBootstrapping(false)
+          }, 340)
+        }
+      })
+    return () => {
+      cancelled = true
+      if (revealTimer) clearTimeout(revealTimer)
     }
-    m.addListener(apply)
-    return () => m.removeListener(apply)
   }, [])
 
-  if (!doctors.length) {
-    return (
-      <div className="empty-hint">
-        Список врачей пуст. Проверьте подключение к МИС и выполните синхронизацию на сервере.
-      </div>
-    )
-  }
-  const specialties = Array.from(
+  const specialties: string[] = Array.from(
     new Set(
-      doctors
+      doctorRows
         .map((d) => (d.specialty ?? '').trim())
         .filter(Boolean),
     ),
-  ).sort((a, b) => a.localeCompare(b, 'ru'))
+  )
+  specialties.sort((a, b) => a.localeCompare(b, 'ru'))
   const selectedSpecialtyTitle = specialtyFilter || 'Все направления'
+  const selectedBranchTitle = useMemo(() => {
+    if (!branchFilter) return 'Все филиалы'
+    return branches.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
+  }, [branchFilter, branches])
 
-  const filteredDoctors = doctors.filter((d) => {
+  const filteredDoctors = doctorRows.filter((d) => {
     const fullName = (d.full_name ?? '').toLowerCase()
     const spec = (d.specialty ?? '').trim()
     const matchName = !query.trim() || fullName.includes(query.trim().toLowerCase())
     const matchSpec = !specialtyFilter || spec === specialtyFilter
     return matchName && matchSpec
   })
+
+  if (isGridBootstrapping) {
+    return <div className="doctor-grid-preload" aria-hidden />
+  }
+
+  if (!doctorRows.length) {
+    return (
+      <div className="empty-hint">
+        Список врачей пуст. Проверьте подключение к МИС и выполните синхронизацию на сервере.
+      </div>
+    )
+  }
 
   return (
     <>
@@ -1317,31 +1479,89 @@ function DoctorGrid({
       </div>
       <div className="doctor-filters">
         <div className="doctor-filter-field">
-          <div className="doctor-search-wrap">
-            <span className="doctor-search-icon" aria-hidden>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M18.3 18.3L25.5 25.5M20.7 11.1C20.7 16.4019 16.4019 20.7 11.1 20.7C5.79807 20.7 1.5 16.4019 1.5 11.1C1.5 5.79807 5.79807 1.5 11.1 1.5C16.4019 1.5 20.7 5.79807 20.7 11.1Z" stroke="#9AA2B3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Найти врача"
-            />
-          </div>
+          <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setBranchPickerOpen(true)}>
+            {selectedBranchTitle}
+          </button>
+          {branchPickerOpen && (
+            createPortal(
+              <div
+                className="service-picker-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Выбор филиала"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setBranchPickerOpen(false)
+                }}
+              >
+                <div className="service-picker-card">
+                  <div className="service-picker-card-head">
+                    <button type="button" className="service-picker-close" onClick={() => setBranchPickerOpen(false)}>
+                      Закрыть
+                    </button>
+                  </div>
+                  <div className="service-picker-scroll">
+                    <button
+                      type="button"
+                      className={`service-picker-item ${branchFilter === '' ? 'active' : ''}`}
+                      onClick={async () => {
+                        setBranchFilter('')
+                        setBranchPickerOpen(false)
+                        try {
+                          setDoctorRows(applyConstraint(await fetchDoctors(undefined)))
+                        } catch {
+                          setDoctorRows([])
+                        }
+                      }}
+                    >
+                      Все филиалы
+                    </button>
+                    {branches.map((b) => (
+                      <button
+                        type="button"
+                        key={b.mis_id}
+                        className={`service-picker-item ${branchFilter === b.mis_id ? 'active' : ''}`}
+                        onClick={async () => {
+                          setBranchFilter(b.mis_id)
+                          setBranchPickerOpen(false)
+                          try {
+                            setDoctorRows(applyConstraint(await fetchDoctors(b.mis_id)))
+                          } catch {
+                            setDoctorRows([])
+                          }
+                        }}
+                      >
+                        {b.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          )}
         </div>
         <div className="doctor-filter-field">
-          {isCoarsePointer ? (
-            <>
-              <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setSpecialtyPickerOpen(true)}>
-                {selectedSpecialtyTitle}
-              </button>
-              {specialtyPickerOpen && (
-                <div className="service-picker-modal" onClick={() => setSpecialtyPickerOpen(false)}>
-                  <div className="service-picker-card" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setSpecialtyPickerOpen(true)}>
+            {selectedSpecialtyTitle}
+          </button>
+          {specialtyPickerOpen && (
+            createPortal(
+              <div
+                className="service-picker-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Выбор направления"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setSpecialtyPickerOpen(false)
+                }}
+              >
+                <div className="service-picker-card">
+                  <div className="service-picker-card-head">
                     <button type="button" className="service-picker-close" onClick={() => setSpecialtyPickerOpen(false)}>
                       Закрыть
                     </button>
+                  </div>
+                  <div className="service-picker-scroll">
                     <button
                       type="button"
                       className={`service-picker-item ${specialtyFilter === '' ? 'active' : ''}`}
@@ -1367,18 +1587,20 @@ function DoctorGrid({
                     ))}
                   </div>
                 </div>
-              )}
-            </>
-          ) : (
-            <select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-              <option value="">Все направления</option>
-              {specialties.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              </div>,
+              document.body,
+            )
           )}
+        </div>
+        <div className="doctor-filter-field">
+          <div className="doctor-search-wrap">
+            <span className="doctor-search-icon" aria-hidden>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M18.3 18.3L25.5 25.5M20.7 11.1C20.7 16.4019 16.4019 20.7 11.1 20.7C5.79807 20.7 1.5 16.4019 1.5 11.1C1.5 5.79807 5.79807 1.5 11.1 1.5C16.4019 1.5 20.7 5.79807 20.7 11.1Z" stroke="#9AA2B3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти врача" />
+          </div>
         </div>
       </div>
       {filteredDoctors.length === 0 && (
@@ -1425,7 +1647,11 @@ function DoctorGrid({
                 )}
               </div>
             </div>
-            <button type="button" className="doctor-card-btn" onClick={() => onPick(d)}>
+            <button
+              type="button"
+              className="doctor-card-btn"
+              onClick={() => onPick(d, { branchId: branchFilter || undefined, specialtyFilter: specialtyFilter || undefined, query: query || undefined })}
+            >
               Расписание онлайн
             </button>
           </article>
@@ -1499,12 +1725,14 @@ function ConsumerCornerScreen({ documents, onBack }: { documents: AdminDocument[
 
 function DoctorSchedule({
   doctor,
+  clinicMisId,
   doctorPhoto,
   doctorMeta,
   onBack,
   onBooked,
 }: {
   doctor: Employee
+  clinicMisId?: string
   doctorPhoto?: string
   doctorMeta?: AdminDoctorMedia
   onBack: () => void
@@ -1528,6 +1756,9 @@ function DoctorSchedule({
   const [monthCursor, setMonthCursor] = useState(() => new Date(day.getFullYear(), day.getMonth(), 1))
   const [monthLoading, setMonthLoading] = useState(false)
   const [monthAvailability, setMonthAvailability] = useState<Record<string, boolean>>({})
+  const [doctorBranches, setDoctorBranches] = useState<Branch[]>([])
+  const [selectedClinicId, setSelectedClinicId] = useState(clinicMisId || '')
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false)
   const todayStart = useMemo(() => startOfDay(new Date()), [])
   const todayKeyMoscow = useMemo(() => dateKeyMoscow(new Date()), [])
   const selectedServiceTitle = useMemo(() => {
@@ -1536,12 +1767,48 @@ function DoctorSchedule({
     if (!found) return 'Выбрать услугу'
     return `${found.name ?? found.mis_id}${found.price != null ? ` · ${found.price} ₽` : ''}`
   }, [pickedServiceId, services])
+  const selectedClinicTitle = useMemo(() => {
+    if (!selectedClinicId) return 'Выбрать филиал'
+    return doctorBranches.find((b) => b.mis_id === selectedClinicId)?.title ?? 'Выбрать филиал'
+  }, [doctorBranches, selectedClinicId])
+
+  useEffect(() => {
+    setSelectedClinicId(clinicMisId || '')
+  }, [clinicMisId, doctor.mis_id])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchDoctorBranches(doctor.mis_id)
+      .then((rows) => {
+        if (cancelled) return
+        setDoctorBranches(rows)
+        if (!rows.length) {
+          setSelectedClinicId('')
+          return
+        }
+        if (selectedClinicId && rows.some((b) => b.mis_id === selectedClinicId)) return
+        if (clinicMisId && rows.some((b) => b.mis_id === clinicMisId)) {
+          setSelectedClinicId(clinicMisId)
+          return
+        }
+        setSelectedClinicId(pickDefaultBranchId(rows))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDoctorBranches([])
+          setSelectedClinicId(clinicMisId || '')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [doctor.mis_id, clinicMisId])
 
   useEffect(() => {
     let cancelled = false
     setSlotsLoading(true)
     setSlotsError(null)
-    fetchDaySlots(doctor.mis_id, day)
+    fetchDaySlots(doctor.mis_id, day, selectedClinicId || undefined)
       .then((s) => {
         if (!cancelled) setSlots(s)
       })
@@ -1554,7 +1821,7 @@ function DoctorSchedule({
     return () => {
       cancelled = true
     }
-  }, [doctor.mis_id, day])
+  }, [doctor.mis_id, day, selectedClinicId])
 
   useEffect(() => {
     let cancelled = false
@@ -1622,7 +1889,7 @@ function DoctorSchedule({
     Promise.all(
       days.map(async (d) => {
         try {
-          const rows = await fetchFreeSlots(doctor.mis_id, d)
+          const rows = await fetchFreeSlots(doctor.mis_id, d, selectedClinicId || undefined)
           const hasFree = dateKeyMoscow(d) >= todayKeyMoscow && rows.length > 0
           return [dateKeyMoscow(d), hasFree] as const
         } catch {
@@ -1642,7 +1909,7 @@ function DoctorSchedule({
     return () => {
       cancelled = true
     }
-  }, [doctor.mis_id, monthCursor, monthOpen, period, todayKeyMoscow])
+  }, [doctor.mis_id, monthCursor, monthOpen, period, selectedClinicId, todayKeyMoscow])
 
   return (
     <>
@@ -1678,6 +1945,51 @@ function DoctorSchedule({
               {doctorMeta?.badge3_label && (
                 <span className="doctor-card-badge doctor-card-badge--3">{doctorMeta.badge3_label}</span>
               )}
+            </div>
+          )}
+
+          {doctorBranches.length > 1 && (
+            <div className="doctor-service-label">
+              <span>Филиал</span>
+              <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setBranchPickerOpen(true)}>
+                {selectedClinicTitle}
+              </button>
+              {branchPickerOpen &&
+                createPortal(
+                  <div
+                    className="service-picker-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Выбор филиала"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) setBranchPickerOpen(false)
+                    }}
+                  >
+                    <div className="service-picker-card">
+                      <div className="service-picker-card-head">
+                        <button type="button" className="service-picker-close" onClick={() => setBranchPickerOpen(false)}>
+                          Закрыть
+                        </button>
+                      </div>
+                      <div className="service-picker-scroll">
+                        {doctorBranches.map((b) => (
+                          <button
+                            type="button"
+                            key={b.mis_id}
+                            className={`service-picker-item ${selectedClinicId === b.mis_id ? 'active' : ''}`}
+                            onClick={() => {
+                              setSelectedClinicId(b.mis_id)
+                              setBranchPickerOpen(false)
+                            }}
+                          >
+                            {b.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>,
+                  document.body,
+                )}
             </div>
           )}
 

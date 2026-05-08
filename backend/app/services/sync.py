@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.mis.client import MisClient
 from app.mis.parsers import (
+    find_clinic_list,
     find_employee_list,
     find_schedule_items,
     find_ticket_items,
@@ -103,10 +105,7 @@ def _extract_clinic_id(row: dict[str, Any]) -> str | None:
 
 
 def _clinic_allowed(clinic_id: str | None) -> bool:
-    target = (settings.mis_target_clinic_guid or "").strip()
-    if not target:
-        return True
-    return (clinic_id or "").strip().lower() == target.lower()
+    return True
 
 
 def _extract_service_id(row: dict[str, Any]) -> str | None:
@@ -216,9 +215,11 @@ def _extract_schedule_intervals(row: dict[str, Any], step: int) -> list[tuple[da
 
     intervals: list[tuple[datetime, datetime]] = []
     periods = row.get("ПериодыГрафика") or row.get("SchedulePeriods") or {}
-    # If periods are present, ONLY free intervals should become available slots.
+    # If periods are present, include both free and busy ranges as schedule frame.
+    # Busy marking is applied later via occupied ingestion, but without these
+    # base ranges busy-only days would disappear from /slots/day.
     if isinstance(periods, dict):
-        for key in ("СвободноеВремя", "FreeTime"):
+        for key in ("СвободноеВремя", "FreeTime", "ЗанятоеВремя", "BusyTime"):
             for item in _period_items(periods.get(key)):
                 is_, ie = slot_bounds(item)
                 if is_ is None:
@@ -282,7 +283,8 @@ def _extract_busy_intervals(row: dict[str, Any], step: int) -> list[tuple[dateti
 
 
 async def _sync_employees(db: Session, client: MisClient) -> int:
-    data = await client.list_employees()
+    # Prefer extended directory payload: it contains clinic linkage per doctor.
+    data = await client.list_employees_with_services()
     rows = find_employee_list(data)
     n = 0
     for row in rows:
@@ -314,13 +316,78 @@ def _target_clinic_id() -> str:
 
 
 def _filter_rows_by_target_clinic(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    target = _target_clinic_id().lower()
-    if not target:
-        return rows
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        if (_extract_clinic_id(row) or "").strip().lower() == target:
-            out.append(row)
+    return rows
+
+
+_EXCLUDED_CLINIC_TITLES = {"евродон чалтырь 2", "евродон суворовский", "чалтырь 2", "суворовский"}
+_EXCLUDED_CLINIC_IDS = {"38540652-401d-11ee-8302-3a1bcc6c939a"}
+
+
+async def _list_clinics(client: MisClient) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    try:
+        data = await client.list_clinics()
+    except Exception as e:
+        logger.warning("list clinics failed: %s", e)
+        return out
+    for row in find_clinic_list(data):
+        hidden = bool(row.get("НеВыгружатьНаСайте"))
+        deleted = bool(row.get("ПометкаУдаления"))
+        if hidden or deleted:
+            continue
+        title = str(row.get("Наименование") or row.get("Name") or "").strip()
+        if title.lower() in _EXCLUDED_CLINIC_TITLES:
+            continue
+        cid = str(row.get("УИД") or row.get("UID") or row.get("GUID") or "").strip()
+        if not cid:
+            continue
+        low_id = cid.lower()
+        if low_id in _EXCLUDED_CLINIC_IDS or low_id in seen:
+            continue
+        seen.add(low_id)
+        out.append((cid, title or cid))
+    return out
+
+
+def _clinic_ids_from_employee_raw(raw_json: str | None, allowed_ids: set[str]) -> list[str]:
+    if not raw_json:
+        return []
+    try:
+        row = json.loads(raw_json)
+    except Exception:
+        return []
+    if not isinstance(row, dict):
+        return []
+
+    clinic = row.get("Клиника") or row.get("Clinic") or row.get("clinic") or row.get("Филиал")
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(v: str | None) -> None:
+        s = str(v or "").strip()
+        if not s:
+            return
+        key = s.lower()
+        if key not in allowed_ids or key in seen:
+            return
+        seen.add(key)
+        out.append(s)
+
+    if isinstance(clinic, dict):
+        add(clinic.get("УИД") or clinic.get("UID") or clinic.get("GUID"))
+        return out
+    if isinstance(clinic, list):
+        for item in clinic:
+            if isinstance(item, dict):
+                add(item.get("УИД") or item.get("UID") or item.get("GUID"))
+            elif isinstance(item, str):
+                for part in item.replace(",", ";").split(";"):
+                    add(part)
+        return out
+    if isinstance(clinic, str):
+        for part in clinic.replace(",", ";").split(";"):
+            add(part)
     return out
 
 
@@ -348,7 +415,11 @@ def _sync_employees_from_enlargement_rows(db: Session, rows: list[dict[str, Any]
         emp.patronymic = pn or emp.patronymic
         emp.specialty = str(spec).strip() if spec else emp.specialty
         emp.is_main = True
-        emp.raw_json = safe_json_dumps(row)
+        # Enlargement rows often do not include clinic bindings; keep richer
+        # dictionary payload if present to preserve doctor->clinic mapping.
+        has_clinic_info = any(k in row for k in ("Клиника", "Clinic", "clinic", "Филиал"))
+        if has_clinic_info or not emp.raw_json:
+            emp.raw_json = safe_json_dumps(row)
         emp.updated_at = _utcnow()
         n += 1
     # NOTE: do not hard-delete employees here; deleting referenced doctors can break
@@ -466,19 +537,44 @@ async def _sync_schedule_enlargement(db: Session, client: MisClient, start: date
 
 
 async def _sync_schedule_per_employee(db: Session, client: MisClient, start: datetime, end: datetime) -> int:
-    emps = db.scalars(select(Employee.mis_id)).all()
+    emp_rows = db.execute(select(Employee.mis_id, Employee.raw_json)).all()
+    emps = [(str(eid), raw) for eid, raw in emp_rows if str(eid).strip()]
+    clinics = await _list_clinics(client)
+    clinic_ids = [cid for cid, _ in clinics]
+    if not clinic_ids:
+        fallback_ids = [str(c).strip() for c in db.scalars(select(ScheduleSlot.clinic_mis_id).distinct()).all() if c]
+        clinic_ids = list(dict.fromkeys(fallback_ids))
+    allowed = {c.lower() for c in clinic_ids}
+    jobs: list[tuple[str, str | None]] = []
+    if clinic_ids:
+        for eid, raw in emps:
+            preferred = _clinic_ids_from_employee_raw(raw, allowed)
+            targets = preferred if preferred else clinic_ids
+            for cid in targets:
+                jobs.append((eid, cid))
+    else:
+        jobs = [(eid, None) for eid, _ in emps]
+
+    sem = asyncio.Semaphore(12)
+
+    async def _fetch_one(eid: str, cid: str | None) -> tuple[str, str | None, list[dict[str, Any]]]:
+        async with sem:
+            data = await client.get_schedule20(eid, start, end, clinic_id=cid)
+            return eid, cid, find_schedule_items(data)
+
     total = 0
-    clinic_id = _target_clinic_id()
-    for eid in emps:
+    tasks = [_fetch_one(eid, cid) for eid, cid in jobs]
+    for fut in asyncio.as_completed(tasks):
         try:
-            data = await client.get_schedule20(str(eid), start, end, clinic_id=clinic_id)
+            eid, clinic_id, items = await fut
         except Exception as ex:
-            logger.debug("schedule20 %s: %s", eid, ex)
+            logger.debug("schedule20 fetch failed: %s", ex)
             continue
-        items = _filter_rows_by_target_clinic(find_schedule_items(data))
-        total += _ingest_schedule_rows(db, items, default_employee_id=None)
-        _ingest_busy_from_schedule_rows(db, items, default_employee_id=None)
-        await asyncio.sleep(0.05)
+        try:
+            total += _ingest_schedule_rows(db, items, default_employee_id=None)
+            _ingest_busy_from_schedule_rows(db, items, default_employee_id=None)
+        except Exception as ex:
+            logger.debug("schedule20 ingest %s clinic=%s: %s", eid, clinic_id, ex)
     return total
 
 
@@ -841,12 +937,14 @@ async def run_full_sync(db: Session) -> SyncRun:
     client = MisClient()
     try:
         _prune_expired_slots(db, keep_days=1)
+        await _sync_employees(db, client)
         raw_enl = await client.get_enlargement_schedule(start, end)
         enl_rows = find_schedule_items(raw_enl)
         if not enl_rows:
             enl_rows = find_ticket_items(raw_enl)
         _sync_employees_from_enlargement_rows(db, enl_rows)
-        _purge_range(db, start, end)
+        # Do not clear whole range before refilling: if MIS calls fail mid-run,
+        # wiping data leads to false "all slots are free" in kiosk UI.
         n_s = _ingest_schedule_rows(db, _filter_rows_by_target_clinic(enl_rows), default_employee_id=None)
         _ingest_busy_from_schedule_rows(db, _filter_rows_by_target_clinic(enl_rows), default_employee_id=None)
         if n_s < 5:
@@ -892,12 +990,12 @@ async def run_slots_sync(db: Session) -> SyncRun:
     client = MisClient()
     try:
         _prune_expired_slots(db, keep_days=1)
-        # Lightweight refresh: update only availability tables.
-        _purge_range(db, start, end)
+        # Do not wipe current range upfront: if sync is interrupted, preserving
+        # previous occupied data is safer than showing "all slots are free".
         inserted = await _sync_schedule_enlargement(db, client, start, end)
-        # Safety fallback if enlargement returned too little data.
-        if inserted < 5:
-            await _sync_schedule_per_employee(db, client, start, end)
+        # Always supplement with per-employee schedule so busy slots are not missed
+        # in contours where enlargement response is incomplete.
+        await _sync_schedule_per_employee(db, client, start, end)
         await _sync_tickets(db, client, start, end)
         run.ok = True
         run.message = "slots_only_ok"
@@ -942,18 +1040,22 @@ async def run_quick_sync_for_employee(db: Session, employee_mis_id: str) -> None
     start, end = _range()
     client = MisClient()
     _purge_employee_range(db, employee_mis_id, start, end)
-    try:
-        data = await client.get_schedule20(
-            employee_mis_id,
-            start,
-            end,
-            clinic_id=_target_clinic_id(),
-        )
-        items = _filter_rows_by_target_clinic(find_schedule_items(data))
-        _ingest_schedule_rows(db, items, default_employee_id=employee_mis_id)
-        _ingest_busy_from_schedule_rows(db, items, default_employee_id=employee_mis_id)
-    except Exception as e:
-        logger.warning("quick sync schedule20: %s", e)
+    clinic_ids = [cid for cid, _ in await _list_clinics(client)]
+    if not clinic_ids:
+        clinic_ids = [None]
+    for cid in clinic_ids:
+        try:
+            data = await client.get_schedule20(
+                employee_mis_id,
+                start,
+                end,
+                clinic_id=cid,
+            )
+            items = find_schedule_items(data)
+            _ingest_schedule_rows(db, items, default_employee_id=employee_mis_id)
+            _ingest_busy_from_schedule_rows(db, items, default_employee_id=employee_mis_id)
+        except Exception as e:
+            logger.warning("quick sync schedule20 clinic=%s: %s", cid or "-", e)
     try:
         data = await client.patient_tickets(start, end, employee_id=employee_mis_id)
         rows = find_ticket_items(data)
