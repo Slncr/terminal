@@ -279,11 +279,11 @@ button {
   z-index: 1;
   width: min(1720px, calc(100vw - 72px));
   margin: 0 auto;
-  padding: 0 8px 18px;
+  padding: 0 8px 40px;
   box-sizing: border-box;
   flex: 1;
-  align-content: center;
-  align-items: center;
+  align-content: start;
+  align-items: stretch;
 }
 
 .main-home {
@@ -296,14 +296,31 @@ button {
   flex-direction: column;
   gap: 0.8rem;
   min-width: 0;
-  width: calc(100% - 60px);
-  margin-right: auto;
+  width: 100%;
+  margin-right: 0;
 }
 
 .home-right {
   min-height: 0;
   background: transparent;
   width: 100%;
+  justify-self: stretch;
+}
+
+/* Short terminal windows: prevent vertical over-stretch look */
+@media (max-height: 820px) {
+  .home-tile-large {
+    min-height: 540px;
+  }
+
+  .home-tile-side {
+    min-height: 270px;
+    height: 270px;
+  }
+
+  .specialties-grid.home-left-small-scroll {
+    height: 268px;
+  }
 }
 
 .home-left-main-grid {
