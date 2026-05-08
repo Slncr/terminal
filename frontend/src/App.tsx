@@ -1380,10 +1380,11 @@ function DoctorGrid({
   const constrainedDoctorIds = useMemo(() => new Set(filterDoctorIds ?? []), [filterDoctorIds])
   const applyConstraint = useCallback(
     (rows: Employee[]) =>
-      constrainedDoctorIds.size
-        ? rows.filter((d) => constrainedDoctorIds.has(d.mis_id))
-        : rows,
-    [constrainedDoctorIds],
+      rows.filter((d) => {
+        if (doctorMedia[d.mis_id]?.show_in_sections === false) return false
+        return constrainedDoctorIds.size ? constrainedDoctorIds.has(d.mis_id) : true
+      }),
+    [constrainedDoctorIds, doctorMedia],
   )
   const [doctorRows, setDoctorRows] = useState<Employee[]>(doctors)
   const [branches, setBranches] = useState<Branch[]>([])
