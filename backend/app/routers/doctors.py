@@ -241,6 +241,15 @@ def list_services_for_doctor(employee_mis_id: str, db: Session = Depends(get_db)
 
 @router.get("/{employee_mis_id}/branches", response_model=list[BranchOut])
 async def list_branches_for_doctor(employee_mis_id: str, db: Session = Depends(get_db)) -> list[BranchOut]:
+    media = db.scalars(select(DoctorMedia).where(DoctorMedia.employee_mis_id == employee_mis_id)).first()
+    if media is not None and media.show_in_branch_filters is False:
+        return []
+
+    hidden_for_doctor: set[str] = set()
+    if media is not None:
+        for item in media.hidden_clinic_ids:
+            hidden_for_doctor.update(_normalized_clinic_tokens(item))
+
     schedule_clinic_ids = [
         str(x).strip()
         for x in db.scalars(
@@ -295,6 +304,8 @@ async def list_branches_for_doctor(employee_mis_id: str, db: Session = Depends(g
     out: list[BranchOut] = []
     for cid in clinic_ids:
         if cid.lower() in _EXCLUDED_CLINIC_IDS:
+            continue
+        if _norm_clinic_id(cid) in hidden_for_doctor:
             continue
         title = name_by_id.get(cid.lower(), cid)
         if title.lower() in _EXCLUDED_CLINIC_TITLES:
