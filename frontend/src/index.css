@@ -102,6 +102,14 @@ button {
 }
 
 .home-layout {
+  /* Viewport-relative layout: reserve header + нижний «воздух», ещё −40px к бюджету грида */
+  --home-head-space: clamp(148px, 16dvh + 88px, 228px);
+  --home-layout-bottom-gap: calc(48px + env(safe-area-inset-bottom, 0px));
+  --home-grid-height-trim: 40px;
+  --home-grid-max-height: calc(
+    100vh - var(--home-head-space) - var(--home-layout-bottom-gap) - var(--home-grid-height-trim)
+  );
+
   position: relative;
   flex: 1;
   min-height: 0;
@@ -112,8 +120,26 @@ button {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
   padding: 0 12px;
+  padding-bottom: var(--home-layout-bottom-gap);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+}
+
+@supports (height: 100dvh) {
+  .home-layout {
+    --home-grid-max-height: calc(
+      100dvh - var(--home-head-space) - var(--home-layout-bottom-gap) - var(--home-grid-height-trim)
+    );
+  }
+}
+
+@supports (height: 100svh) {
+  .home-layout {
+    --home-grid-max-height: calc(
+      100svh - var(--home-head-space) - var(--home-layout-bottom-gap) - var(--home-grid-height-trim)
+    );
+  }
 }
 
 .home-layout::before {
@@ -292,9 +318,12 @@ button {
   z-index: 1;
   width: min(1720px, calc(100vw - 72px));
   margin: 0 auto;
-  padding: 0 8px 40px;
+  /* нижний отступ экрана даёт padding у .home-layout; здесь только внутренний зазор */
+  padding: 0 8px 10px;
   box-sizing: border-box;
-  flex: 1;
+  /* flex:1 тянул зону скролла к самому низу вьюпорта — из-за этого «прилипание» к краю */
+  flex: 0 1 auto;
+  max-height: var(--home-grid-max-height);
   min-height: 0;
   align-content: start;
   /* default grid stretch makes the short column match the tall one — huge cards on kiosks */
