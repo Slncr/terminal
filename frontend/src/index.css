@@ -113,9 +113,9 @@ button {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* не режем контент — раньше + max-height на гриде давали «окно» и скролл внутри */
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .home-layout::before {
@@ -296,14 +296,13 @@ button {
   margin: 0 auto;
   padding: 0 8px;
   box-sizing: border-box;
-  flex: 0 1 auto;
+  /* Занимаем высоту под шапкой и центрируем блок строк — как эталон, не прилипание к верху */
+  flex: 1;
   min-height: 0;
-  align-content: start;
+  align-content: center;
   /* default grid stretch makes the short column match the tall one — huge cards on kiosks */
   align-items: start;
   overflow: visible;
-  transform: scale(0.9);
-  transform-origin: top center;
 }
 
 .main-home {
@@ -334,25 +333,23 @@ button {
   justify-self: stretch;
 }
 
-@media (max-height: 720px) {
+/* Очень низкий экран — слегка ужимаем, без «сломанных» vh-формул на базовых стилях */
+@media (max-height: 640px) {
   .home-head {
     padding: 12px 24px 0;
   }
 
   .logo-mark-img {
-    width: min(260px, 38vw);
+    width: min(280px, 40vw);
   }
 
-  .home-status-pill {
-    font-size: 0.88rem;
+  .home-tile-large {
+    min-height: min(620px, 52vh);
   }
 
-  .home-tile {
-    padding: 1.4rem 1.5rem;
-  }
-
-  .home-tile:not(.home-tile-small) .tile-title {
-    font-size: clamp(22px, 4.8vmin, 34px);
+  .home-tile-side {
+    min-height: min(306px, 26vh);
+    height: min(306px, 26vh);
   }
 }
 
@@ -474,7 +471,7 @@ button {
 }
 
 .home-tile:not(.home-tile-small) .tile-title {
-  font-size: clamp(22px, 5vmin, 38px);
+  font-size: 38px;
   line-height: 1.04;
   max-width: 62%;
   letter-spacing: -0.01em;
@@ -513,8 +510,7 @@ button {
 }
 
 .home-tile-large {
-  /* Десктоп: до 620px; киоски/терминалы: от высоты окна (~48% строки контента после шапки) */
-  min-height: min(620px, max(200px, calc((100vh - 160px) * 0.48)));
+  min-height: 620px;
 }
 
 .tile-doctors {
@@ -566,7 +562,7 @@ button {
   align-content: start;
   justify-content: start;
   width: 782px;
-  height: clamp(196px, min(300px, calc((100vh - 180px) * 0.28)), 300px);
+  height: 300px;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
@@ -636,9 +632,8 @@ button {
 
 .home-tile-side {
   box-sizing: border-box;
-  /* Несколько боковых карточек — высота делит оставшийся экран (≈5 слотов под шапкой) */
-  min-height: 0;
-  height: clamp(100px, min(306px, calc((100vh - 200px) / 4.85)), 306px);
+  min-height: 306px;
+  height: 306px;
 }
 
 .doctor-photo {
@@ -2850,11 +2845,11 @@ main {
   }
 
   .home-tile-large {
-    min-height: min(420px, max(200px, calc((100vh - 120px) * 0.44)));
+    min-height: 290px;
   }
 
   .home-tile:not(.home-tile-small) .tile-title {
-    font-size: clamp(20px, 5vmin, 34px);
+    font-size: 34px;
     max-width: 70%;
   }
 
