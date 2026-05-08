@@ -145,6 +145,8 @@ class DoctorMediaIn(BaseModel):
     badge2_label: str | None = None
     badge3_label: str | None = None
     show_in_sections: bool = True
+    show_in_branch_filters: bool = True
+    hidden_clinic_ids: list[str] = Field(default_factory=list)
     show_specialty: bool = True
 
 

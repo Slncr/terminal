@@ -2483,10 +2483,15 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [doctorBadge2, setDoctorBadge2] = useState('')
   const [doctorBadge3, setDoctorBadge3] = useState('')
   const [doctorShowInSections, setDoctorShowInSections] = useState(true)
+  const [doctorShowInBranchFilters, setDoctorShowInBranchFilters] = useState(true)
+  const [doctorBranchOptions, setDoctorBranchOptions] = useState<Branch[]>([])
+  const [doctorHiddenClinicIds, setDoctorHiddenClinicIds] = useState<string[]>([])
   const [doctorShowSpecialty, setDoctorShowSpecialty] = useState(true)
   const [doctorSurname, setDoctorSurname] = useState('')
   const [doctorName, setDoctorName] = useState('')
   const [doctorPatronymic, setDoctorPatronymic] = useState('')
+
+  const normalizeClinicId = useCallback((v: string) => v.trim().toLowerCase(), [])
 
   const reload = useCallback(async () => {
     const [t, d, b, c, cg, m, feature] = await Promise.all([
@@ -2639,6 +2644,9 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
       setDoctorBadge2('')
       setDoctorBadge3('')
       setDoctorShowInSections(true)
+      setDoctorShowInBranchFilters(true)
+      setDoctorBranchOptions([])
+      setDoctorHiddenClinicIds([])
       setDoctorShowSpecialty(true)
       setDoctorSurname('')
       setDoctorName('')
@@ -2653,11 +2661,37 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setDoctorBadge2(selected?.badge2_label ?? '')
     setDoctorBadge3(selected?.badge3_label ?? '')
     setDoctorShowInSections(selected?.show_in_sections !== false)
+    setDoctorShowInBranchFilters(selected?.show_in_branch_filters !== false)
+    setDoctorHiddenClinicIds(
+      Array.from(
+        new Set((selected?.hidden_clinic_ids ?? []).map((x) => normalizeClinicId(x)).filter(Boolean)),
+      ),
+    )
     setDoctorShowSpecialty(selected?.show_specialty !== false)
     setDoctorSurname(doc?.surname ?? '')
     setDoctorName(doc?.name ?? '')
     setDoctorPatronymic(doc?.patronymic ?? '')
-  }, [doctorId, media, doctors])
+  }, [doctorId, media, doctors, normalizeClinicId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!doctorId) {
+      setDoctorBranchOptions([])
+      return () => {
+        cancelled = true
+      }
+    }
+    fetchDoctorBranches(doctorId)
+      .then((rows) => {
+        if (!cancelled) setDoctorBranchOptions(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setDoctorBranchOptions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [doctorId])
 
   return (
     <main className="admin-shell">
@@ -3666,11 +3700,47 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
             <input
               type="checkbox"
+              checked={doctorShowInBranchFilters}
+              onChange={(e) => setDoctorShowInBranchFilters(e.target.checked)}
+            />
+            <span>Показывать в фильтрах по филиалам</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <input
+              type="checkbox"
               checked={doctorShowSpecialty}
               onChange={(e) => setDoctorShowSpecialty(e.target.checked)}
             />
             <span>Показывать специализацию</span>
           </label>
+          {doctorBranchOptions.length > 0 && (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div className="meta">Показывать врача в филиалах:</div>
+              <div style={{ display: 'grid', gap: '0.35rem', marginTop: '0.35rem' }}>
+                {doctorBranchOptions.map((b) => {
+                  const cid = normalizeClinicId(b.mis_id)
+                  const isVisible = !doctorHiddenClinicIds.includes(cid)
+                  return (
+                    <label key={b.mis_id} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={isVisible}
+                        onChange={(e) => {
+                          setDoctorHiddenClinicIds((prev) => {
+                            const set = new Set(prev.map((x) => normalizeClinicId(x)))
+                            if (e.target.checked) set.delete(cid)
+                            else set.add(cid)
+                            return Array.from(set)
+                          })
+                        }}
+                      />
+                      <span>{b.title}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <input
             type="file"
             accept="image/*"
@@ -3700,6 +3770,8 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 badge2_label: doctorBadge2.trim() || null,
                 badge3_label: doctorBadge3.trim() || null,
                 show_in_sections: doctorShowInSections,
+                show_in_branch_filters: doctorShowInBranchFilters,
+                hidden_clinic_ids: doctorHiddenClinicIds,
                 show_specialty: doctorShowSpecialty,
               })
               setStatus('Данные врача сохранены')
@@ -3721,6 +3793,10 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                   {m.badge2_label && <div className="meta">Приписка 2: {m.badge2_label}</div>}
                   {m.badge3_label && <div className="meta">Приписка 3: {m.badge3_label}</div>}
                   <div className="meta">В разделах по врачам: {m.show_in_sections === false ? 'скрыт' : 'показан'}</div>
+                  <div className="meta">В фильтрах по филиалам: {m.show_in_branch_filters === false ? 'скрыт' : 'показан'}</div>
+                  {!!m.hidden_clinic_ids?.length && (
+                    <div className="meta">Скрыт точечно в филиалах: {m.hidden_clinic_ids.length}</div>
+                  )}
                   <div className="meta">Специализация: {m.show_specialty === false ? 'скрыта' : 'показана'}</div>
                 </div>
                 <button

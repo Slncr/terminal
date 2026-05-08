@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime
 
@@ -192,8 +193,39 @@ class DoctorMedia(Base):
     badge2_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     badge3_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     show_in_sections: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_in_branch_filters: Mapped[bool] = mapped_column(Boolean, default=True)
+    hidden_clinic_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     show_specialty: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    @property
+    def hidden_clinic_ids(self) -> list[str]:
+        raw = self.hidden_clinic_ids_json
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return []
+        if not isinstance(data, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in data:
+            s = str(item or "").strip()
+            if not s:
+                continue
+            key = s.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(s)
+        return out
+
+    @hidden_clinic_ids.setter
+    def hidden_clinic_ids(self, values: list[str] | None) -> None:
+        arr = [str(x).strip() for x in (values or []) if str(x).strip()]
+        self.hidden_clinic_ids_json = json.dumps(arr, ensure_ascii=False) if arr else None
 
 
 class CheckupItem(Base):

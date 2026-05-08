@@ -191,6 +191,8 @@ def upsert_doctor_media(payload: DoctorMediaIn, db: Session = Depends(get_db)) -
         existing.badge2_label = payload.badge2_label
         existing.badge3_label = payload.badge3_label
         existing.show_in_sections = payload.show_in_sections
+        existing.show_in_branch_filters = payload.show_in_branch_filters
+        existing.hidden_clinic_ids = payload.hidden_clinic_ids
         existing.show_specialty = payload.show_specialty
     if existing.employee_mis_id and db.get(Employee, existing.employee_mis_id) is None:
         raise HTTPException(status_code=404, detail="doctor not found")

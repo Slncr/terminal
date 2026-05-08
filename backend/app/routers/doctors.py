@@ -7,12 +7,16 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.mis.client import MisClient
 from app.mis.parsers import find_clinic_list
-from app.models import Employee, EmployeeService, ScheduleSlot, Service
+from app.models import DoctorMedia, Employee, EmployeeService, ScheduleSlot, Service
 from app.schemas import BranchOut, EmployeeOut, ServiceOut
 
 router = APIRouter()
 _EXCLUDED_CLINIC_TITLES = {"евродон чалтырь 2", "евродон суворовский", "чалтырь 2", "суворовский"}
 _EXCLUDED_CLINIC_IDS = {"38540652-401d-11ee-8302-3a1bcc6c939a"}
+
+
+def _norm_clinic_id(value: str | None) -> str:
+    return (value or "").strip().strip("{}").lower()
 
 
 def _split_clinic_tokens(raw: str) -> list[str]:
@@ -28,6 +32,10 @@ def _split_clinic_tokens(raw: str) -> list[str]:
         seen.add(key)
         out.append(s)
     return out
+
+
+def _normalized_clinic_tokens(raw: str | None) -> set[str]:
+    return {_norm_clinic_id(x) for x in _split_clinic_tokens(raw or "") if _norm_clinic_id(x)}
 
 
 def _extract_employee_clinic_ids_from_raw(raw_json: str | None) -> set[str]:
@@ -128,9 +136,35 @@ def list_doctors(
     db: Session = Depends(get_db),
 ) -> list[Employee]:
     cid = (clinic_mis_id or "").strip()
+    cid_norm = _norm_clinic_id(cid)
     q = select(Employee)
     if cid:
         ids = _employee_ids_for_clinic(db, cid)
+        if ids:
+            hidden_in_branch_filters = {
+                str(x).strip()
+                for x in db.scalars(
+                    select(DoctorMedia.employee_mis_id).where(DoctorMedia.show_in_branch_filters.is_(False))
+                ).all()
+                if str(x or "").strip()
+            }
+            if hidden_in_branch_filters:
+                ids = ids - hidden_in_branch_filters
+
+        # Optional per-branch hide list from admin.
+        if ids and cid_norm:
+            hidden_for_clinic: set[str] = set()
+            for row in db.scalars(select(DoctorMedia).where(DoctorMedia.employee_mis_id.in_(ids))).all():
+                emp_id = str(row.employee_mis_id or "").strip()
+                if not emp_id:
+                    continue
+                hidden_tokens: set[str] = set()
+                for item in row.hidden_clinic_ids:
+                    hidden_tokens.update(_normalized_clinic_tokens(item))
+                if cid_norm in hidden_tokens:
+                    hidden_for_clinic.add(emp_id)
+            if hidden_for_clinic:
+                ids = ids - hidden_for_clinic
         if not ids:
             return []
         q = q.where(Employee.mis_id.in_(ids))
