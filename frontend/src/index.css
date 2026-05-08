@@ -23,9 +23,14 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
+  height: 100%;
   background: #ffffff;
 }
 
@@ -37,6 +42,10 @@ h1 {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 button,
@@ -51,9 +60,10 @@ button {
 }
 
 .app-shell {
-  min-height: 100vh;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: linear-gradient(120deg, #edf4f9 0%, #f8fafc 50%, #f4f8fb 100%);
   position: relative;
   overflow: hidden;
@@ -93,8 +103,10 @@ button {
 
 .home-layout {
   position: relative;
-  min-height: 100vh;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
   overflow: hidden;
   width: 100vw;
   margin-left: calc(50% - 50vw);
@@ -230,6 +242,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
   padding: 25px 45px 0;
 }
 
@@ -282,13 +295,24 @@ button {
   padding: 0 8px 40px;
   box-sizing: border-box;
   flex: 1;
+  min-height: 0;
   align-content: start;
-  align-items: stretch;
+  /* default grid stretch makes the short column match the tall one — huge cards on kiosks */
+  align-items: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .main-home {
   padding-top: 0;
   padding-bottom: 0;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .home-left {
@@ -310,16 +334,54 @@ button {
 /* Short terminal windows: prevent vertical over-stretch look */
 @media (max-height: 820px) {
   .home-tile-large {
-    min-height: 540px;
+    min-height: min(540px, calc((100dvh - 200px) / 2));
   }
 
   .home-tile-side {
     min-height: 270px;
-    height: 270px;
+    height: min(270px, calc((100dvh - 180px) / 3));
   }
 
   .specialties-grid.home-left-small-scroll {
-    height: 268px;
+    height: min(268px, calc(100dvh - 420px));
+  }
+}
+
+@media (max-height: 680px) {
+  .home-head {
+    padding: 12px 20px 0;
+  }
+
+  .logo-mark-img {
+    width: min(280px, 40vw);
+  }
+
+  .home-tile-large {
+    min-height: min(440px, calc((100dvh - 160px) / 2));
+  }
+
+  .home-tile-side {
+    min-height: 220px;
+    height: min(220px, calc((100dvh - 140px) / 3));
+  }
+}
+
+@media (max-height: 580px) {
+  .home-status-pill {
+    font-size: 0.85rem;
+  }
+
+  .home-tile-large {
+    min-height: min(320px, calc((100dvh - 120px) / 2));
+  }
+
+  .home-tile-side {
+    min-height: 160px;
+    height: min(160px, calc((100dvh - 100px) / 3));
+  }
+
+  .home-tile {
+    padding: 1.35rem 1.5rem;
   }
 }
 
@@ -328,6 +390,7 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
   width: 100%;
+  align-items: start;
 }
 
 .home-left-small-scroll {
@@ -768,6 +831,7 @@ button {
 
 main {
   flex: 1;
+  min-height: 0;
   padding: 1.25rem clamp(1rem, 3vw, 2rem) 1.25rem;
   max-width: 1837;
   margin: 0 auto;
