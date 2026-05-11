@@ -794,6 +794,13 @@ main {
   max-width: 1837;
   margin: 0 auto;
   width: 100%;
+  overflow-x: hidden;
+}
+
+/* Главная (main.main-home) без скролла; все остальные экраны — скролл внутри main */
+main:not(.main-home) {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .page-transition {
