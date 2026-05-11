@@ -3755,13 +3755,11 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
             className="btn-primary"
             onClick={async () => {
               if (!doctorId) return
-              if (doctorSurname.trim() || doctorName.trim() || doctorPatronymic.trim()) {
-                await updateAdminDoctorName(doctorId, {
-                  surname: doctorSurname.trim(),
-                  name: doctorName.trim(),
-                  patronymic: doctorPatronymic.trim() || null,
-                })
-              }
+              await updateAdminDoctorName(doctorId, {
+                surname: doctorSurname.trim(),
+                name: doctorName.trim(),
+                patronymic: doctorPatronymic.trim() || null,
+              })
               await upsertAdminDoctorMedia({
                 employee_mis_id: doctorId,
                 photo_url: doctorPhoto,

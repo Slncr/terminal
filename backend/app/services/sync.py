@@ -25,6 +25,7 @@ from app.mis.parsers import (
     employee_names,
 )
 from app.models import (
+    DoctorMedia,
     Employee,
     EmployeeService,
     NomenclatureItem,
@@ -37,6 +38,14 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 _FULL_SYNC_LOCK = threading.Lock()
+
+
+def _locked_employee_ids(db: Session) -> set[str]:
+    return {
+        str(x).strip()
+        for x in db.scalars(select(DoctorMedia.employee_mis_id).where(DoctorMedia.employee_mis_id.is_not(None))).all()
+        if str(x or "").strip()
+    }
 
 
 def _utcnow() -> datetime:
@@ -286,6 +295,7 @@ async def _sync_employees(db: Session, client: MisClient) -> int:
     # Prefer extended directory payload: it contains clinic linkage per doctor.
     data = await client.list_employees_with_services()
     rows = find_employee_list(data)
+    locked_ids = _locked_employee_ids(db)
     n = 0
     for row in rows:
         eid = parse_employee_id(row)
@@ -295,15 +305,24 @@ async def _sync_employees(db: Session, client: MisClient) -> int:
         phone = row.get("Телефон") or row.get("Phone") or row.get("phone")
         spec = row.get("Специальность") or row.get("Specialty") or row.get("Должность")
         emp = db.get(Employee, eid)
+        is_new = emp is None
         if emp is None:
             emp = Employee(mis_id=eid)
             db.add(emp)
-        emp.surname = sn or emp.surname
-        emp.name = fn or emp.name
-        emp.patronymic = pn or emp.patronymic
-        emp.phone = str(phone).strip() if phone else emp.phone
-        emp.specialty = str(spec).strip() if spec else emp.specialty
-        emp.is_main = True
+        is_locked = eid in locked_ids and not is_new
+        if is_new or not is_locked:
+            emp.surname = sn or emp.surname
+            emp.name = fn or emp.name
+            emp.patronymic = pn or emp.patronymic
+            emp.phone = str(phone).strip() if phone else emp.phone
+            emp.specialty = str(spec).strip() if spec else emp.specialty
+            emp.is_main = True
+        else:
+            # Keep admin-managed FIO intact for existing configured doctors.
+            if not emp.phone and phone:
+                emp.phone = str(phone).strip()
+            if not emp.specialty and spec:
+                emp.specialty = str(spec).strip()
         emp.raw_json = safe_json_dumps(row)
         emp.updated_at = _utcnow()
         n += 1
@@ -393,6 +412,7 @@ def _clinic_ids_from_employee_raw(raw_json: str | None, allowed_ids: set[str]) -
 
 def _sync_employees_from_enlargement_rows(db: Session, rows: list[dict[str, Any]]) -> int:
     rows = _filter_rows_by_target_clinic(rows)
+    locked_ids = _locked_employee_ids(db)
     keep_ids: set[str] = set()
     n = 0
     for row in rows:
@@ -407,14 +427,21 @@ def _sync_employees_from_enlargement_rows(db: Session, rows: list[dict[str, Any]
         pn = " ".join(parts[2:]) if len(parts) > 2 else None
         spec = row.get("Специализация") or row.get("Specialty") or row.get("Должность")
         emp = db.get(Employee, eid)
+        is_new = emp is None
         if emp is None:
             emp = Employee(mis_id=eid)
             db.add(emp)
-        emp.surname = sn or emp.surname
-        emp.name = fn or emp.name
-        emp.patronymic = pn or emp.patronymic
-        emp.specialty = str(spec).strip() if spec else emp.specialty
-        emp.is_main = True
+        is_locked = eid in locked_ids and not is_new
+        if is_new or not is_locked:
+            emp.surname = sn or emp.surname
+            emp.name = fn or emp.name
+            emp.patronymic = pn or emp.patronymic
+            emp.specialty = str(spec).strip() if spec else emp.specialty
+            emp.is_main = True
+        else:
+            # Keep admin-managed FIO intact for existing configured doctors.
+            if not emp.specialty and spec:
+                emp.specialty = str(spec).strip()
         # Enlargement rows often do not include clinic bindings; keep richer
         # dictionary payload if present to preserve doctor->clinic mapping.
         has_clinic_info = any(k in row for k in ("Клиника", "Clinic", "clinic", "Филиал"))

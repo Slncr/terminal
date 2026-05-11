@@ -213,8 +213,8 @@ def update_doctor_name(employee_mis_id: str, payload: EmployeeNameIn, db: Sessio
     row = db.get(Employee, employee_mis_id)
     if row is None:
         raise HTTPException(status_code=404, detail="doctor not found")
-    row.surname = payload.surname.strip() or row.surname
-    row.name = payload.name.strip() or row.name
+    row.surname = payload.surname.strip() or None
+    row.name = payload.name.strip() or None
     row.patronymic = (payload.patronymic or "").strip() or None
     db.commit()
     return {"ok": True}
