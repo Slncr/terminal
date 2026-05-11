@@ -121,6 +121,10 @@ function formatDayRu(d: Date): string {
   })
 }
 
+function isLeninaBranch(b: Branch): boolean {
+  return (b.title ?? '').toLocaleLowerCase('ru-RU').includes('ленина')
+}
+
 function pickDefaultBranchId(branches: Branch[]): string {
   if (!branches.length) return ''
   const preferred = branches.find((b) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(DEFAULT_BRANCH_TITLE_NEEDLE))
@@ -1452,6 +1456,7 @@ function DoctorGrid({
   const [branchFilter, setBranchFilter] = useState(initialBranchId ?? '')
   const [query, setQuery] = useState(initialQuery ?? '')
   const [specialtyFilter, setSpecialtyFilter] = useState(initialSpecialty ?? '')
+  const [specialtyBranchIds, setSpecialtyBranchIds] = useState<Set<string> | null>(null)
   const [branchPickerOpen, setBranchPickerOpen] = useState(false)
   const [specialtyPickerOpen, setSpecialtyPickerOpen] = useState(false)
   const [isGridBootstrapping, setIsGridBootstrapping] = useState(true)
@@ -1491,9 +1496,11 @@ function DoctorGrid({
     fetchBranches()
       .then((rows) => {
         if (cancelled) return
-        const rowsForScreen = isInstrumentalScreen
-          ? rows.filter((b) => ['вереса', 'вавил', 'социалист'].some((n) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(n)))
-          : rows
+        const rowsForScreen = (
+          isInstrumentalScreen
+            ? rows.filter((b) => ['вереса', 'вавил', 'социалист'].some((n) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(n)))
+            : rows
+        ).filter((b) => !isLeninaBranch(b))
         setBranches(rowsForScreen)
         const defaultId =
           initialBranchId && rowsForScreen.some((x) => x.mis_id === initialBranchId)
@@ -1536,11 +1543,15 @@ function DoctorGrid({
     ),
   )
   specialties.sort((a, b) => a.localeCompare(b, 'ru'))
+  const branchesForPicker = useMemo(() => {
+    if (!specialtyFilter || specialtyBranchIds == null) return visibleBranches
+    return visibleBranches.filter((b) => specialtyBranchIds.has(b.mis_id))
+  }, [visibleBranches, specialtyFilter, specialtyBranchIds])
   const selectedSpecialtyTitle = specialtyFilter || 'Все направления'
   const selectedBranchTitle = useMemo(() => {
     if (!branchFilter) return 'Все филиалы'
-    return visibleBranches.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
-  }, [branchFilter, visibleBranches])
+    return branchesForPicker.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
+  }, [branchFilter, branchesForPicker])
 
   const filteredDoctors = doctorRows.filter((d) => {
     const fullName = (d.full_name ?? '').toLowerCase()
@@ -1550,15 +1561,64 @@ function DoctorGrid({
     return matchName && matchSpec
   })
 
+  useEffect(() => {
+    let cancelled = false
+    if (!specialtyFilter) {
+      setSpecialtyBranchIds(null)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    Promise.all(
+      visibleBranches.map(async (b) => {
+        try {
+          const docs = applyConstraint(await fetchDoctors(b.mis_id))
+          const hasSpecialty = docs.some((d) => (d.specialty ?? '').trim() === specialtyFilter)
+          return hasSpecialty ? b.mis_id : null
+        } catch {
+          return null
+        }
+      }),
+    ).then((ids) => {
+      if (cancelled) return
+      const nextIds = new Set(ids.filter((x): x is string => Boolean(x)))
+      setSpecialtyBranchIds(nextIds)
+      if (branchFilter && !nextIds.has(branchFilter)) {
+        const fallbackBranch = visibleBranches.find((b) => nextIds.has(b.mis_id))
+        const fallbackBranchId = fallbackBranch?.mis_id ?? ''
+        setBranchFilter(fallbackBranchId)
+        fetchDoctors(fallbackBranchId || undefined)
+          .then((docs) => {
+            if (!cancelled) setDoctorRows(applyConstraint(docs))
+          })
+          .catch(() => {
+            if (!cancelled) setDoctorRows([])
+          })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [specialtyFilter, visibleBranches, branchFilter, applyConstraint])
+
   if (isGridBootstrapping) {
     return <div className="doctor-grid-preload" aria-hidden />
   }
 
   if (!doctorRows.length) {
     return (
-      <div className="empty-hint">
-        Список врачей пуст. Проверьте подключение к МИС и выполните синхронизацию на сервере.
-      </div>
+      <>
+        <div className="doctors-page-head">
+          <button type="button" className="back-chip-btn" onClick={onBack}>
+            <span aria-hidden>←</span> Назад
+          </button>
+          <h2>Записаться на прием</h2>
+        </div>
+        <div className="empty-hint">
+          Список врачей пуст. Попробуйте выбрать другой филиал или специализацию.
+        </div>
+      </>
     )
   }
 
@@ -1608,7 +1668,7 @@ function DoctorGrid({
                     >
                       Все филиалы
                     </button>
-                    {visibleBranches.map((b) => (
+                    {branchesForPicker.map((b) => (
                       <button
                         type="button"
                         key={b.mis_id}
