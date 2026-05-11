@@ -446,11 +446,54 @@ export default function App() {
           <DoctorGrid
             doctors={view.doctors}
             doctorMedia={doctorMedia}
+            sourceTitle={view.title}
+            tiles={tiles}
             initialBranchId={view.initialBranchId}
             initialSpecialty={view.initialSpecialty}
             initialQuery={view.initialQuery}
             filterDoctorIds={view.filterDoctorIds}
             onBack={() => navigate({ kind: 'home' })}
+            onOpenByTileLikeHome={(title, filters, directSingle) => {
+              const needles = (filters ?? '')
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean)
+              if (!needles.length) return
+              const matched = sectionVisibleDoctors.filter((d) => {
+                if (doctorMedia[d.mis_id]?.show_in_sections === false) return false
+                const s = (d.specialty ?? '').toLowerCase()
+                const fio = (d.full_name ?? '').toLowerCase()
+                const haystack = `${s} ${fio}`.trim()
+                const tokens = haystack.split(/[^a-zа-я0-9]+/i).filter(Boolean)
+                return needles.some((qRaw) => {
+                  const q = qRaw.toLowerCase()
+                  if (q.length <= 2) return tokens.includes(q)
+                  return haystack.includes(q)
+                })
+              })
+              if (directSingle && matched.length === 1) {
+                navigate({
+                  kind: 'doctor',
+                  doctor: matched[0],
+                  backTo: {
+                    kind: 'doctors',
+                    title: view.title,
+                    doctors: view.doctors,
+                    initialBranchId: view.initialBranchId,
+                    initialSpecialty: view.initialSpecialty,
+                    initialQuery: view.initialQuery,
+                    filterDoctorIds: view.filterDoctorIds,
+                  },
+                })
+                return
+              }
+              navigate({
+                kind: 'doctors',
+                title,
+                doctors: matched,
+                filterDoctorIds: matched.map((d) => d.mis_id),
+              })
+            }}
             onPick={(d, ctx) =>
               navigate({
                 kind: 'doctor',
@@ -1361,20 +1404,26 @@ function CheckupDetails({ item, onBack }: { item: AdminCheckupItem; onBack: () =
 function DoctorGrid({
   doctors,
   doctorMedia,
+  sourceTitle,
+  tiles,
   initialBranchId,
   initialSpecialty,
   initialQuery,
   filterDoctorIds,
   onBack,
+  onOpenByTileLikeHome,
   onPick,
 }: {
   doctors: Employee[]
   doctorMedia: Record<string, AdminDoctorMedia>
+  sourceTitle?: string
+  tiles: AdminTile[]
   initialBranchId?: string
   initialSpecialty?: string
   initialQuery?: string
   filterDoctorIds?: string[]
   onBack: () => void
+  onOpenByTileLikeHome?: (title: string, filters: string | null, directSingle?: boolean) => void
   onPick: (d: Employee, ctx: { branchId?: string; specialtyFilter?: string; query?: string }) => void
 }) {
   const constrainedDoctorIds = useMemo(() => new Set(filterDoctorIds ?? []), [filterDoctorIds])
@@ -1394,6 +1443,31 @@ function DoctorGrid({
   const [branchPickerOpen, setBranchPickerOpen] = useState(false)
   const [specialtyPickerOpen, setSpecialtyPickerOpen] = useState(false)
   const [isGridBootstrapping, setIsGridBootstrapping] = useState(true)
+  const isInstrumentalScreen = useMemo(
+    () => (sourceTitle ?? '').toLocaleLowerCase('ru-RU').includes('инструмент'),
+    [sourceTitle],
+  )
+  const visibleBranches = useMemo(() => {
+    if (!isInstrumentalScreen) return branches
+    const allowedNeedles = ['вереса', 'вавил', 'социалист']
+    return branches.filter((b) => allowedNeedles.some((n) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(n)))
+  }, [branches, isInstrumentalScreen])
+  const instrumentalUziTile = useMemo(() => {
+    const byType = tiles.find((t) => t.tile_type === 'instrumental_doctor' && (t.title ?? '').toLocaleLowerCase('ru-RU').includes('узи'))
+    if (byType) return byType
+    const bySpecialty = tiles.find((t) => t.tile_type === 'specialty' && (t.title ?? '').toLocaleLowerCase('ru-RU').includes('узи'))
+    if (bySpecialty) return bySpecialty
+    return {
+      id: 'instrumental-uzi-fallback',
+      title: 'УЗИ',
+      tile_type: 'instrumental_doctor',
+      size: 'small',
+      sort_order: -1000,
+      specialty_filters: 'узи,ультразвук',
+      image_url: null,
+      is_active: true,
+    } as AdminTile
+  }, [tiles])
 
   useEffect(() => {
     setDoctorRows(applyConstraint(doctors))
@@ -1405,8 +1479,14 @@ function DoctorGrid({
     fetchBranches()
       .then((rows) => {
         if (cancelled) return
-        setBranches(rows)
-        const defaultId = initialBranchId && rows.some((x) => x.mis_id === initialBranchId) ? initialBranchId : pickDefaultBranchId(rows)
+        const rowsForScreen = isInstrumentalScreen
+          ? rows.filter((b) => ['вереса', 'вавил', 'социалист'].some((n) => (b.title ?? '').toLocaleLowerCase('ru-RU').includes(n)))
+          : rows
+        setBranches(rowsForScreen)
+        const defaultId =
+          initialBranchId && rowsForScreen.some((x) => x.mis_id === initialBranchId)
+            ? initialBranchId
+            : pickDefaultBranchId(rowsForScreen)
         setBranchFilter(defaultId)
         fetchDoctors(defaultId || undefined)
           .then((docs) => {
@@ -1434,7 +1514,7 @@ function DoctorGrid({
       cancelled = true
       if (revealTimer) clearTimeout(revealTimer)
     }
-  }, [])
+  }, [initialBranchId, isInstrumentalScreen, applyConstraint])
 
   const specialties: string[] = Array.from(
     new Set(
@@ -1447,8 +1527,8 @@ function DoctorGrid({
   const selectedSpecialtyTitle = specialtyFilter || 'Все направления'
   const selectedBranchTitle = useMemo(() => {
     if (!branchFilter) return 'Все филиалы'
-    return branches.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
-  }, [branchFilter, branches])
+    return visibleBranches.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
+  }, [branchFilter, visibleBranches])
 
   const filteredDoctors = doctorRows.filter((d) => {
     const fullName = (d.full_name ?? '').toLowerCase()
@@ -1516,7 +1596,7 @@ function DoctorGrid({
                     >
                       Все филиалы
                     </button>
-                    {branches.map((b) => (
+                    {visibleBranches.map((b) => (
                       <button
                         type="button"
                         key={b.mis_id}
@@ -1610,6 +1690,38 @@ function DoctorGrid({
         </div>
       )}
       <div className="grid-doctors">
+        {isInstrumentalScreen && (
+          <article
+            className="doctor-card doctor-card-quick-filter"
+            onClick={() => onOpenByTileLikeHome?.(instrumentalUziTile.title || 'УЗИ', instrumentalUziTile.specialty_filters, true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onOpenByTileLikeHome?.(instrumentalUziTile.title || 'УЗИ', instrumentalUziTile.specialty_filters, true)
+              }
+            }}
+          >
+            <div className="doctor-card-info">
+              <div className="doctor-card-photo">
+                {instrumentalUziTile.image_url && (
+                  <img
+                    src={instrumentalUziTile.image_url}
+                    alt={instrumentalUziTile.title || 'УЗИ'}
+                    className="doctor-card-photo-img"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                )}
+              </div>
+              <div className="doctor-card-text">
+                <h2 className="doctor-card-name">{instrumentalUziTile.title || 'УЗИ'}</h2>
+              </div>
+            </div>
+            <button type="button" className="doctor-card-btn">Показать врачей</button>
+          </article>
+        )}
         {filteredDoctors.map((d) => (
           <article key={d.mis_id} className="doctor-card">
             <div className="doctor-card-info">

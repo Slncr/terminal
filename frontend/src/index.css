@@ -108,7 +108,7 @@ button {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-  padding: 0 40px;
+  padding: 0 12px;
   padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   display: flex;
@@ -294,7 +294,7 @@ button {
   position: relative;
   z-index: 1;
   width: max-content;
-  max-width: calc(100vw - 80px);
+  max-width: calc(100vw - 24px);
   margin: 0 auto;
   padding: 0 8px;
   box-sizing: border-box;
@@ -322,14 +322,14 @@ button {
 }
 
 .home-right {
-  width: 400px;
+  width: 500px;
   flex-shrink: 0;
   box-sizing: border-box;
 }
 
 .home-left-main-grid {
   display: grid;
-  grid-template-columns: 400px 400px;
+  grid-template-columns: 500px 500px;
   gap: 12px;
   width: max-content;
   align-items: start;
@@ -355,7 +355,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 400px;
+  width: 500px;
   box-sizing: border-box;
   flex-shrink: 0;
   padding-right: 0;
@@ -486,12 +486,12 @@ button {
 
 .home-tile-large {
   box-sizing: border-box;
-  width: 400px;
-  min-width: 400px;
-  max-width: 400px;
-  height: 460px;
-  min-height: 460px;
-  max-height: 460px;
+  width: 500px;
+  min-width: 500px;
+  max-width: 500px;
+  height: 560px;
+  min-height: 560px;
+  max-height: 560px;
   flex-shrink: 0;
 }
 
@@ -615,13 +615,13 @@ button {
 
 .home-tile-side {
   box-sizing: border-box;
-  width: 400px;
-  min-width: 400px;
-  max-width: 400px;
-  /* 224 + 12 + 224 = 460 — ровно как высота большой плитки */
-  height: 224px;
-  min-height: 224px;
-  max-height: 224px;
+  width: 500px;
+  min-width: 500px;
+  max-width: 500px;
+  /* 274 + 12 + 274 = 560 — ровно как высота большой плитки */
+  height: 274px;
+  min-height: 274px;
+  max-height: 274px;
   flex-shrink: 0;
 }
 
@@ -794,9 +794,6 @@ main {
   max-width: 1837;
   margin: 0 auto;
   width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
 }
 
 .page-transition {
@@ -2831,44 +2828,44 @@ main {
 
   .home-left {
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
     align-items: center;
   }
 
   .home-left-main-grid {
     grid-template-columns: 1fr;
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
     justify-items: center;
   }
 
   .home-right {
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
   }
 
   .home-right-scroll {
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
     align-items: center;
   }
 
   .home-tile-large {
-    width: min(400px, 100%);
+    width: min(500px, 100%);
     min-width: 0;
-    max-width: 400px;
+    max-width: 500px;
     height: auto;
-    min-height: min(460px, 64vh);
-    max-height: 460px;
+    min-height: min(560px, 70vh);
+    max-height: 560px;
   }
 
   .home-tile-side {
-    width: min(400px, 100%);
+    width: min(500px, 100%);
     min-width: 0;
-    max-width: 400px;
+    max-width: 500px;
     height: auto;
-    min-height: min(224px, 26vh);
-    max-height: 224px;
+    min-height: min(274px, 28vh);
+    max-height: 274px;
   }
 
   .home-tile:not(.home-tile-small) .tile-title {
