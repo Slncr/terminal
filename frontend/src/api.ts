@@ -152,6 +152,7 @@ export type AdminTile = {
   size: string
   sort_order: number
   specialty_filters: string | null
+  target_employee_mis_id?: string | null
   image_url: string | null
   image_fit?: string
   image_x?: number

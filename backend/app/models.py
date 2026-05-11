@@ -139,6 +139,7 @@ class HomeTile(Base):
     size: Mapped[str] = mapped_column(String(32), default="small")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     specialty_filters: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_employee_mis_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_fit: Mapped[str] = mapped_column(String(16), default="cover")
     image_x: Mapped[int] = mapped_column(Integer, default=0)

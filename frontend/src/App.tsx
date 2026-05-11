@@ -785,7 +785,14 @@ function HomeTiles({
   )
 
   const openByFilters = useCallback(
-    (title: string, filters: string | null, directSingle: boolean = false) => {
+    (title: string, filters: string | null, directSingle: boolean = false, forcedDoctorMisId?: string | null) => {
+      if (forcedDoctorMisId) {
+        const forced = doctors.find((d) => d.mis_id === forcedDoctorMisId && doctorMedia[d.mis_id]?.show_in_sections !== false)
+        if (forced) {
+          onOpenDoctor(forced)
+          return
+        }
+      }
       const normalizedTitle = title.trim().toLocaleLowerCase('ru-RU')
       const effectiveFilters =
         normalizedTitle === 'инструментальная диагностика'
@@ -809,7 +816,7 @@ function HomeTiles({
       }
       onOpenGroup(title, matched)
     },
-    [doctorsForAny, onOpenDoctor, onOpenDoctors, onOpenGroup],
+    [doctorMedia, doctors, doctorsForAny, onOpenDoctor, onOpenDoctors, onOpenGroup],
   )
 
   useEffect(() => {
@@ -909,7 +916,7 @@ function HomeTiles({
                 key={t.id}
                 type="button"
                 className={`home-tile home-tile-large ${getTileClassName(t, 'main')}`}
-                onClick={() => openByFilters(t.title, t.specialty_filters)}
+                onClick={() => openByFilters(t.title, t.specialty_filters, false, t.target_employee_mis_id ?? null)}
               >
                 {image.url && (
                   <img
@@ -934,7 +941,7 @@ function HomeTiles({
                         className="main-inline-chip"
                         onClick={(e) => {
                           e.stopPropagation()
-                          openByFilters(chip.title, chip.specialty_filters, true)
+                          openByFilters(chip.title, chip.specialty_filters, true, chip.target_employee_mis_id ?? null)
                         }}
                       >
                         {chip.title}
@@ -969,7 +976,7 @@ function HomeTiles({
                     onOpenCheckups()
                     return
                   }
-                  openByFilters(t.title, t.specialty_filters)
+                  openByFilters(t.title, t.specialty_filters, false, t.target_employee_mis_id ?? null)
                 }}
               >
                 {image.url && (
@@ -2542,6 +2549,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
   const [tileX, setTileX] = useState(0)
   const [tileY, setTileY] = useState(0)
   const [tileScale, setTileScale] = useState(100)
+  const [tileTargetDoctorMisId, setTileTargetDoctorMisId] = useState('')
   const [draggingPreview, setDraggingPreview] = useState(false)
 
   const [docTitle, setDocTitle] = useState('')
@@ -2748,6 +2756,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
     setTileX(existingTileImage?.image_x ?? 0)
     setTileY(existingTileImage?.image_y ?? 0)
     setTileScale(existingTileImage?.image_scale ?? 100)
+    setTileTargetDoctorMisId(existingTileImage?.target_employee_mis_id ?? '')
     setTileImage('')
   }, [tilePresetKey, existingTileImage?.id])
 
@@ -2849,6 +2858,20 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
               <option value="contain">Вписать (contain)</option>
             </select>
           </label>
+          <label>
+            Врач для прямого перехода
+            <select value={tileTargetDoctorMisId} onChange={(e) => setTileTargetDoctorMisId(e.target.value)}>
+              <option value="">Не задан (по фильтрам)</option>
+              {doctors
+                .slice()
+                .sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? '', 'ru'))
+                .map((d) => (
+                  <option key={d.mis_id} value={d.mis_id}>
+                    {d.full_name}
+                  </option>
+                ))}
+            </select>
+          </label>
           <input placeholder="URL картинки" value={tileImage} onChange={(e) => setTileImage(e.target.value)} />
           <input
             type="file"
@@ -2870,6 +2893,7 @@ function AdminPanel({ doctors, syncLabel }: { doctors: Employee[]; syncLabel: st
                 size: tilePreset.size,
                 sort_order: tilePreset.sort_order,
                 specialty_filters: tilePreset.specialty_filters,
+                target_employee_mis_id: tileTargetDoctorMisId || null,
                 image_url: previewTileImage,
                 image_fit: tileFit,
                 image_x: tileX,

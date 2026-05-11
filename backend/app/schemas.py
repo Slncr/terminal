@@ -85,6 +85,7 @@ class HomeTileIn(BaseModel):
     size: str = "small"
     sort_order: int = 0
     specialty_filters: str | None = None
+    target_employee_mis_id: str | None = None
     image_url: str | None = None
     image_fit: str = "cover"
     image_x: int = 0

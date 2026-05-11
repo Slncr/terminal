@@ -85,6 +85,7 @@ def create_tile(payload: HomeTileIn, db: Session = Depends(get_db)) -> HomeTile:
         row.size = payload.size
         row.sort_order = payload.sort_order
         row.specialty_filters = payload.specialty_filters
+        row.target_employee_mis_id = payload.target_employee_mis_id
         row.image_url = payload.image_url
         row.image_fit = payload.image_fit
         row.image_x = payload.image_x
