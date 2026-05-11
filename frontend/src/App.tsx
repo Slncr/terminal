@@ -99,7 +99,7 @@ const FIXED_TILE_PRESETS: FixedTilePreset[] = [
     specialty_filters: FUNCTIONAL_COMMON_FILTERS,
   },
   { key: 'side-actions', title: 'Акции', tile_type: 'side', size: 'side', sort_order: -1000, specialty_filters: null },
-  { key: 'side-cosmo', title: 'Косметология', tile_type: 'side', size: 'side', sort_order: -999, specialty_filters: 'косметолог,дерматолог,эстет' },
+  { key: 'side-cosmo', title: 'Косметология', tile_type: 'side', size: 'side', sort_order: -999, specialty_filters: 'косметолог,эстет' },
   { key: 'side-checkup', title: 'Программы check-up', tile_type: 'side', size: 'side', sort_order: -998, specialty_filters: 'check-up,чекап,чек-ап,программа' },
   { key: 'small-trauma', title: 'Травматолог-ортопед', tile_type: 'specialty', size: 'small', sort_order: -1000, specialty_filters: 'травматолог,ортопед' },
   { key: 'small-neuro', title: 'Невролог', tile_type: 'specialty', size: 'small', sort_order: -999, specialty_filters: 'невролог' },
@@ -711,7 +711,7 @@ function HomeTiles({
         tile_type: 'side',
         size: 'side',
         sort_order: -999,
-        specialty_filters: 'косметолог,дерматолог,эстет',
+        specialty_filters: 'косметолог,эстет',
         image_url: null,
         is_active: true,
       },
@@ -799,7 +799,10 @@ function HomeTiles({
         onOpenDoctors()
         return
       }
-      const matched = doctorsForAny(needles)
+      let matched = doctorsForAny(needles)
+      if (normalizedTitle.includes('космет')) {
+        matched = matched.filter((d) => !((d.specialty ?? '').toLocaleLowerCase('ru-RU').includes('дерматолог')))
+      }
       if (directSingle && matched.length === 1) {
         onOpenDoctor(matched[0])
         return
