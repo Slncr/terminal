@@ -335,13 +335,13 @@ export default function App() {
     [doctors, doctorMedia],
   )
 
-  const navigate = useCallback((next: MainView) => {
+  const navigate = useCallback((next: MainView, opts?: { minDelayMs?: number }) => {
     const token = ++pageTransitionTokenRef.current
     setPagePhase('out')
     if (pageTransitionTimerRef.current != null) {
       window.clearTimeout(pageTransitionTimerRef.current)
     }
-    const minDelayMs = next.kind === 'doctor' ? 360 : 260
+    const minDelayMs = opts?.minDelayMs ?? (next.kind === 'doctor' ? 360 : 260)
     const minDelay = new Promise<void>((resolve) => {
       pageTransitionTimerRef.current = window.setTimeout(resolve, minDelayMs)
     })
@@ -471,6 +471,8 @@ export default function App() {
                   return haystack.includes(q)
                 })
               })
+              const isUziFlow = title.trim().toLocaleLowerCase('ru-RU').includes('узи')
+              const extraDelay = isUziFlow ? 620 : undefined
               if (directSingle && matched.length === 1) {
                 navigate({
                   kind: 'doctor',
@@ -484,7 +486,7 @@ export default function App() {
                     initialQuery: view.initialQuery,
                     filterDoctorIds: view.filterDoctorIds,
                   },
-                })
+                }, { minDelayMs: extraDelay })
                 return
               }
               navigate({
@@ -492,7 +494,7 @@ export default function App() {
                 title,
                 doctors: matched,
                 filterDoctorIds: matched.map((d) => d.mis_id),
-              })
+              }, { minDelayMs: extraDelay })
             }}
             onPick={(d, ctx) =>
               navigate({
