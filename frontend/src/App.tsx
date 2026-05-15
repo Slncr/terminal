@@ -111,6 +111,7 @@ const FIXED_TILE_PRESETS: FixedTilePreset[] = [
   { key: 'small-us', title: 'УЗИ', tile_type: 'specialty', size: 'small', sort_order: -993, specialty_filters: 'узи,ультразвук' },
 ]
 const DEFAULT_BRANCH_TITLE_NEEDLE = 'социалист'
+const GENERAL_SCREEN_EXCLUDED_NEEDLES = ['мрт', 'магнитно-резонанс', 'рентген', 'компьютерн']
 
 function formatDayRu(d: Date): string {
   return d.toLocaleDateString('ru-RU', {
@@ -123,6 +124,14 @@ function formatDayRu(d: Date): string {
 
 function isLeninaBranch(b: Branch): boolean {
   return (b.title ?? '').toLocaleLowerCase('ru-RU').includes('ленина')
+}
+
+function isInstrumentalSpecialtyForGeneralScreen(specialty: string | null | undefined): boolean {
+  const low = (specialty ?? '').trim().toLocaleLowerCase('ru-RU')
+  if (!low) return false
+  if (GENERAL_SCREEN_EXCLUDED_NEEDLES.some((n) => low.includes(n))) return true
+  const tokens = low.split(/[^a-zа-я0-9]+/i).filter(Boolean)
+  return tokens.includes('кт')
 }
 
 function pickDefaultBranchId(branches: Branch[]): string {
@@ -384,11 +393,12 @@ export default function App() {
             doctorMedia={doctorMedia}
             onOpenConsumer={() => navigate({ kind: 'consumer' })}
             onOpenDoctors={() => navigate({ kind: 'doctors', title: 'Все врачи', doctors: sectionVisibleDoctors })}
-            onOpenGroup={(title, doctorsInGroup) =>
+            onOpenGroup={(title, doctorsInGroup, initialSpecialty) =>
               navigate({
                 kind: 'doctors',
                 title,
                 doctors: doctorsInGroup,
+                initialSpecialty,
                 filterDoctorIds: doctorsInGroup.map((d) => d.mis_id),
               })
             }
@@ -552,7 +562,7 @@ function HomeTiles({
   doctorMedia: Record<string, AdminDoctorMedia>
   onOpenConsumer: () => void
   onOpenDoctors: () => void
-  onOpenGroup: (title: string, doctorsInGroup: Employee[]) => void
+  onOpenGroup: (title: string, doctorsInGroup: Employee[], initialSpecialty?: string) => void
   onOpenDoctor: (doctor: Employee) => void
   onOpenPromos: () => void
   onOpenCheckups: () => void
@@ -807,7 +817,7 @@ function HomeTiles({
       const needles = effectiveFilters
         .split(',')
         .map((x) => x.trim())
-        .filter(Boolean)
+        .filter((x): x is string => Boolean(x))
       if (!needles.length) {
         onOpenDoctors()
         return
@@ -816,11 +826,42 @@ function HomeTiles({
       if (normalizedTitle.includes('космет')) {
         matched = matched.filter((d) => !((d.specialty ?? '').toLocaleLowerCase('ru-RU').includes('дерматолог')))
       }
+      const specialtyValues = matched
+        .map((d) => (d.specialty ?? '').trim())
+        .filter((x): x is string => Boolean(x))
+      const uniqueSpecialties = Array.from(new Set<string>(specialtyValues))
+      const specialtiesByNeedles = uniqueSpecialties.filter((spec) => {
+        const low = spec.toLocaleLowerCase('ru-RU')
+        const tokens = low.split(/[^a-zа-я0-9]+/i).filter(Boolean)
+        return needles.some((qRaw) => {
+          const q = qRaw.toLocaleLowerCase('ru-RU')
+          if (q.length <= 2) return tokens.includes(q)
+          return low.includes(q)
+        })
+      })
+      const isNeurologTile = normalizedTitle.includes('невролог')
+      let initialSpecialty: string | undefined
+      if (isNeurologTile) {
+        const neuroSpecialties = uniqueSpecialties.filter((spec) => spec.toLocaleLowerCase('ru-RU').includes('невролог'))
+        if (neuroSpecialties.length) {
+          initialSpecialty =
+            neuroSpecialties.find((spec) => spec.trim().toLocaleLowerCase('ru-RU') === 'невролог') ??
+            neuroSpecialties[0]
+        }
+      }
+      if (!initialSpecialty) {
+        initialSpecialty =
+          specialtiesByNeedles.length === 1
+            ? specialtiesByNeedles[0]
+            : uniqueSpecialties.length === 1
+              ? uniqueSpecialties[0]
+              : undefined
+      }
       if (directSingle && matched.length === 1) {
         onOpenDoctor(matched[0])
         return
       }
-      onOpenGroup(title, matched)
+      onOpenGroup(title, matched, initialSpecialty)
     },
     [doctorMedia, doctors, doctorsForAny, onOpenDoctor, onOpenDoctors, onOpenGroup],
   )
@@ -1535,9 +1576,17 @@ function DoctorGrid({
     }
   }, [initialBranchId, isInstrumentalScreen, applyConstraint])
 
+  const visibleDoctorRows = useMemo(
+    () =>
+      isInstrumentalScreen
+        ? doctorRows
+        : doctorRows.filter((d) => !isInstrumentalSpecialtyForGeneralScreen(d.specialty)),
+    [doctorRows, isInstrumentalScreen],
+  )
+
   const specialties: string[] = Array.from(
     new Set(
-      doctorRows
+      visibleDoctorRows
         .map((d) => (d.specialty ?? '').trim())
         .filter(Boolean),
     ),
@@ -1553,13 +1602,19 @@ function DoctorGrid({
     return branchesForPicker.find((b) => b.mis_id === branchFilter)?.title ?? 'Все филиалы'
   }, [branchFilter, branchesForPicker])
 
-  const filteredDoctors = doctorRows.filter((d) => {
+  const filteredDoctors = visibleDoctorRows.filter((d) => {
     const fullName = (d.full_name ?? '').toLowerCase()
     const spec = (d.specialty ?? '').trim()
     const matchName = !query.trim() || fullName.includes(query.trim().toLowerCase())
     const matchSpec = !specialtyFilter || spec === specialtyFilter
     return matchName && matchSpec
   })
+
+  useEffect(() => {
+    if (!isInstrumentalScreen && specialtyFilter && isInstrumentalSpecialtyForGeneralScreen(specialtyFilter)) {
+      setSpecialtyFilter('')
+    }
+  }, [isInstrumentalScreen, specialtyFilter])
 
   useEffect(() => {
     let cancelled = false
@@ -1606,7 +1661,7 @@ function DoctorGrid({
     return <div className="doctor-grid-preload" aria-hidden />
   }
 
-  if (!doctorRows.length) {
+  if (!visibleDoctorRows.length) {
     return (
       <>
         <div className="doctors-page-head">
