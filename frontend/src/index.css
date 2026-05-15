@@ -526,7 +526,12 @@ button {
 }
 
 .tile-instrumental .main-inline-chip {
-  background: #cceafd80;
+  background: rgba(227, 239, 249, 0.94);
+  border: 0;
+  color: #2f4158;
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  box-shadow: 0 6px 14px rgba(38, 80, 122, 0.12);
 }
 
 .specialties-grid {
@@ -1418,12 +1423,15 @@ main:not(.main-home) {
   background: #ffffff;
   color: #46516a;
   font-size: 0.8rem;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .doctor-slot-pill.selected {
-  border-color: #0094f5;
-  color: #0094f5;
-  background: #edf7ff;
+  border-color: #007ad0;
+  color: #005f9f;
+  background: linear-gradient(180deg, #eef8ff 0%, #dbefff 100%);
+  box-shadow: 0 0 0 2px rgba(0, 148, 245, 0.28);
+  transform: translateY(-1px);
 }
 
 .doctor-slot-pill:disabled {
@@ -1510,7 +1518,29 @@ main:not(.main-home) {
 .doctor-booking-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   margin-top: 0.9rem;
+}
+
+.doctor-booking-submit-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  max-width: 100%;
+}
+
+.booking-hint-box {
+  border-radius: 12px;
+  padding: 0.55rem 0.8rem;
+  background: rgba(255, 246, 232, 0.98);
+  border: 1px solid rgba(255, 184, 77, 0.65);
+  color: #7a4312;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(122, 67, 18, 0.08);
+  width: max-content;
+  max-width: min(420px, 60vw);
 }
 
 .doctor-book-btn {
@@ -1525,6 +1555,22 @@ main:not(.main-home) {
 
 .doctor-book-btn:disabled {
   opacity: 0.5;
+}
+
+.doctor-service-select-btn.service-needs-attention {
+  animation: serviceAttentionPulse 1s ease-in-out 2;
+}
+
+@keyframes serviceAttentionPulse {
+  0%,
+  100% {
+    border-color: #0094f5;
+    box-shadow: 0 0 0 0 rgba(0, 148, 245, 0);
+  }
+  50% {
+    border-color: #ff9f2a;
+    box-shadow: 0 0 0 5px rgba(255, 159, 42, 0.34);
+  }
 }
 
 .booking-screen-backdrop {

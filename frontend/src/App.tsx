@@ -1990,6 +1990,8 @@ function DoctorSchedule({
   const [selectedSlot, setSelectedSlot] = useState<DaySlot | null>(null)
   const [picked, setPicked] = useState<DaySlot | null>(null)
   const [pickedServiceId, setPickedServiceId] = useState('')
+  const [bookingHint, setBookingHint] = useState<string | null>(null)
+  const [serviceNeedsAttention, setServiceNeedsAttention] = useState(false)
   const [servicePickerOpen, setServicePickerOpen] = useState(false)
   const [period, setPeriod] = useState<'week' | 'month'>('week')
   const [monthOpen, setMonthOpen] = useState(false)
@@ -2007,6 +2009,7 @@ function DoctorSchedule({
     if (!found) return 'Выбрать услугу'
     return `${found.name ?? found.mis_id}${found.price != null ? ` · ${found.price} ₽` : ''}`
   }, [pickedServiceId, services])
+  const serviceRequired = services.length > 0
   const selectedClinicTitle = useMemo(() => {
     if (!selectedClinicId) return 'Выбрать филиал'
     return doctorBranches.find((b) => b.mis_id === selectedClinicId)?.title ?? 'Выбрать филиал'
@@ -2067,7 +2070,10 @@ function DoctorSchedule({
     let cancelled = false
     fetchDoctorServices(doctor.mis_id)
       .then((rows) => {
-        if (!cancelled) setServices(rows)
+        if (!cancelled) {
+          setServices(rows)
+          if (!rows.length) setPickedServiceId('')
+        }
       })
       .catch(() => {
         if (!cancelled) setServices([])
@@ -2076,6 +2082,18 @@ function DoctorSchedule({
       cancelled = true
     }
   }, [doctor.mis_id])
+
+  useEffect(() => {
+    if (!bookingHint) return
+    const timer = window.setTimeout(() => setBookingHint(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [bookingHint])
+
+  useEffect(() => {
+    if (!serviceNeedsAttention) return
+    const timer = window.setTimeout(() => setServiceNeedsAttention(false), 1400)
+    return () => window.clearTimeout(timer)
+  }, [serviceNeedsAttention])
 
   const shiftDay = (delta: number) => {
     setDay((d) => {
@@ -2236,7 +2254,15 @@ function DoctorSchedule({
           {services.length > 0 && (
             <div className="doctor-service-label">
               <span>Записаться на приём</span>
-              <button type="button" className="doctor-service-select doctor-service-select-btn" onClick={() => setServicePickerOpen(true)}>
+              <button
+                type="button"
+                className={`doctor-service-select doctor-service-select-btn ${serviceNeedsAttention ? 'service-needs-attention' : ''}`}
+                onClick={() => {
+                  setServiceNeedsAttention(false)
+                  setBookingHint(null)
+                  setServicePickerOpen(true)
+                }}
+              >
                 {selectedServiceTitle}
               </button>
               {servicePickerOpen &&
@@ -2262,6 +2288,7 @@ function DoctorSchedule({
                           className={`service-picker-item ${pickedServiceId === '' ? 'active' : ''}`}
                           onClick={() => {
                             setPickedServiceId('')
+                            setServiceNeedsAttention(false)
                             setServicePickerOpen(false)
                           }}
                         >
@@ -2274,6 +2301,8 @@ function DoctorSchedule({
                             className={`service-picker-item ${pickedServiceId === s.mis_id ? 'active' : ''}`}
                             onClick={() => {
                               setPickedServiceId(s.mis_id)
+                              setServiceNeedsAttention(false)
+                              setBookingHint(null)
                               setServicePickerOpen(false)
                             }}
                           >
@@ -2417,14 +2446,28 @@ function DoctorSchedule({
           )}
 
           <div className="doctor-booking-actions">
-            <button
-              type="button"
-              className="doctor-book-btn"
-              disabled={!selectedSlot || selectedSlot.status === 'busy'}
-              onClick={() => setPicked(selectedSlot)}
-            >
-              Записаться на прием
-            </button>
+            <div className="doctor-booking-submit-inline">
+              {bookingHint && <div className="booking-hint-box">{bookingHint}</div>}
+              <button
+                type="button"
+                className="doctor-book-btn"
+                disabled={!selectedSlot || selectedSlot.status === 'busy'}
+                onClick={() => {
+                  if (!selectedSlot) return
+                  if (serviceRequired && !pickedServiceId) {
+                    setBookingHint('Перед записью выберите услугу')
+                    setServiceNeedsAttention(false)
+                    window.requestAnimationFrame(() => setServiceNeedsAttention(true))
+                    return
+                  }
+                  setBookingHint(null)
+                  setServiceNeedsAttention(false)
+                  setPicked(selectedSlot)
+                }}
+              >
+                Записаться на прием
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -2479,6 +2522,23 @@ function BookingModal({
   const [ok, setOk] = useState(false)
   const selectedService = services.find((s) => s.mis_id === serviceId)
   const clinicLabel = slot.clinic_mis_id ? 'Евродон Социалистическая' : 'Евродон'
+  const normalizePhoneDigits = (raw: string): string => {
+    let digits = raw.replace(/\D/g, '')
+    if (!digits) return ''
+    if (digits[0] === '8') digits = `7${digits.slice(1)}`
+    if (digits[0] !== '7') digits = `7${digits}`
+    return digits.slice(0, 11)
+  }
+  const formatPhoneInput = (raw: string): string => {
+    const digits = normalizePhoneDigits(raw)
+    if (!digits) return ''
+    const rest = digits.slice(1)
+    if (!rest.length) return '+7'
+    if (rest.length <= 3) return `+7 (${rest}`
+    if (rest.length <= 6) return `+7 (${rest.slice(0, 3)}) ${rest.slice(3)}`
+    if (rest.length <= 8) return `+7 (${rest.slice(0, 3)}) ${rest.slice(3, 6)}-${rest.slice(6)}`
+    return `+7 (${rest.slice(0, 3)}) ${rest.slice(3, 6)}-${rest.slice(6, 8)}-${rest.slice(8, 10)}`
+  }
 
   const formatBirthdayInput = (raw: string): string => {
     const digits = raw.replace(/\D/g, '').slice(0, 8)
@@ -2529,7 +2589,7 @@ function BookingModal({
         patient_name: name,
         patient_patronymic: patronymic || undefined,
         birthday: normalizedBirthday,
-        phone: phone.replace(/\D/g, ''),
+        phone: normalizePhoneDigits(phone),
       })
       let current = appt
       for (let i = 0; i < 20 && current.status === 'pending'; i++) {
@@ -2607,9 +2667,9 @@ function BookingModal({
               />
               <input
                 inputMode="tel"
-                placeholder="Телефон"
+                placeholder="+7 (___) ___-__-__"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
               />
             </div>
 
@@ -2628,7 +2688,7 @@ function BookingModal({
               <button
                 type="button"
                 className="doctor-book-btn"
-                disabled={busy || !surname.trim() || !name.trim() || !parseBirthday(birthday) || phone.replace(/\D/g, '').length < 10}
+                disabled={busy || !surname.trim() || !name.trim() || !parseBirthday(birthday) || normalizePhoneDigits(phone).length < 11}
                 onClick={() => void submit()}
               >
                 {busy ? 'Отправка…' : 'Записаться на прием'}
